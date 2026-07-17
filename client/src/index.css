@@ -1,0 +1,193 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Google Fonts (Hebrew — Rubik + Assistant) ──────────────────────────── */
+/* Already loaded via index.html <link> for performance */
+
+/* ─── Base / Reset ───────────────────────────────────────────────────────── */
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent; /* remove iOS tap flash */
+  }
+
+  html {
+    direction: rtl;
+    font-family: 'Rubik', 'Assistant', ui-sans-serif, system-ui, sans-serif;
+    /* Smooth scrolling on iOS */
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-textPrimary;
+    margin: 0;
+    /* Prevent overscroll bounce showing white background */
+    overscroll-behavior: none;
+    /* Account for iOS notch/home bar */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Remove default list styles */
+  ul, ol { list-style: none; padding: 0; margin: 0; }
+
+  /* Buttons reset */
+  button {
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  /* Inputs */
+  input, textarea {
+    font-family: inherit;
+    direction: rtl;
+  }
+}
+
+/* ─── Component helpers ──────────────────────────────────────────────────── */
+@layer components {
+  /* iOS-style scrollable list region */
+  .scroll-container {
+    @apply overflow-y-auto;
+    -webkit-overflow-scrolling: touch;
+    /* Leave room for fixed bottom nav */
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+  }
+
+  /* Section header (TODAY / TOMORROW / date) */
+  .section-header {
+    @apply sticky top-0 z-10
+           bg-gray-100 border-y border-divider
+           px-4 py-1.5
+           text-sm font-medium text-primary
+           flex items-center justify-between;
+  }
+
+  /* Reminder row */
+  .reminder-row {
+    @apply flex items-center
+           bg-surface border-b border-divider
+           px-4 py-3
+           transition-colors duration-150
+           active:bg-gray-50;
+  }
+
+  /* Large bold time display (BZ Reminder style) */
+  .time-display {
+    @apply font-light text-textPrimary leading-none;
+    font-size: 2rem;
+  }
+
+  .time-ampm {
+    @apply text-xs text-textSecondary mt-0.5;
+  }
+
+  /* FAB — red floating action button */
+  .fab {
+    @apply fixed z-50
+           w-14 h-14 rounded-full
+           bg-accent text-white
+           flex items-center justify-center
+           text-2xl font-thin
+           shadow-fab
+           transition-transform duration-150
+           active:scale-95;
+    bottom: calc(1.5rem + env(safe-area-inset-bottom) + 3.5rem); /* above bottom nav */
+    /* Position in center of screen */
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  /* Bottom navigation bar */
+  .bottom-nav {
+    @apply fixed bottom-0 left-0 right-0 z-40
+           bg-surface border-t border-divider
+           flex items-center justify-around
+           px-2;
+    height: calc(3.5rem + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .bottom-nav-tab {
+    @apply flex flex-col items-center justify-center
+           flex-1 h-full gap-0.5
+           text-textSecondary
+           transition-colors duration-150;
+    font-size: 0.65rem;
+  }
+
+  .bottom-nav-tab.active {
+    @apply text-accent;
+  }
+
+  /* Modal overlay */
+  .modal-overlay {
+    @apply fixed inset-0 z-50
+           bg-black/40 backdrop-blur-sm
+           flex items-end;
+  }
+
+  /* Bottom sheet */
+  .bottom-sheet {
+    @apply w-full bg-surface rounded-t-[20px]
+           shadow-2xl
+           animate-slide-up;
+    max-height: 90vh;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Drag handle */
+  .drag-handle {
+    @apply w-10 h-1 rounded-full bg-gray-300 mx-auto mt-3 mb-1;
+  }
+
+  /* Completed badge */
+  .badge-completed {
+    @apply inline-flex items-center gap-1
+           text-xs font-medium
+           text-green-700 bg-green-50
+           px-2 py-0.5 rounded-full;
+  }
+
+  /* Recurring indicator icon */
+  .recurrence-icon {
+    @apply text-primary text-sm;
+  }
+
+  /* Snooze indicator */
+  .snooze-badge {
+    @apply inline-flex items-center gap-1
+           text-xs text-amber-700 bg-amber-50
+           px-2 py-0.5 rounded-full;
+  }
+}
+
+/* ─── Utility overrides ──────────────────────────────────────────────────── */
+@layer utilities {
+  /* Smooth momentum scroll for list areas */
+  .momentum-scroll {
+    -webkit-overflow-scrolling: touch;
+    overflow-y: auto;
+  }
+
+  /* Hide scrollbar on iOS/webkit while keeping scroll functionality */
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Safe area padding helpers */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+}
