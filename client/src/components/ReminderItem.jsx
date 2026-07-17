@@ -1,6 +1,5 @@
 import { useState, useRef } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { remindersApi } from '../api/reminders';
+import { useReminderMutations } from '../hooks/useReminderMutations';
 import { parseDisplayTime, RECURRENCE_LABELS, isOverdue } from '../utils/dateHelpers';
 
 /**
@@ -12,29 +11,16 @@ import { parseDisplayTime, RECURRENCE_LABELS, isOverdue } from '../utils/dateHel
  *   • Tap to expand (future edit flow hook)
  */
 export default function ReminderItem({ reminder, onEdit }) {
-  const queryClient = useQueryClient();
+  const { completeMutation, deleteMutation } = useReminderMutations();
   const [swipeX, setSwipeX] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
   const touchStartX = useRef(null);
   const touchStartY = useRef(null);
   const itemRef = useRef(null);
 
-  const ACTION_THRESHOLD = 72; // px to reveal action buttons
-  const MAX_SWIPE = 160;       // px max swipe distance
+  const ACTION_THRESHOLD = 72;
+  const MAX_SWIPE = 160;
 
-  // ── Mutations ──────────────────────────────────────────────────────────────
-  const completeMutation = useMutation({
-    mutationFn: () => remindersApi.complete(reminder._id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reminders'] });
-      queryClient.invalidateQueries({ queryKey: ['reminders', 'completed'] });
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: () => remindersApi.delete(reminder._id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['reminders'] }),
-  });
 
   // ── Touch handlers (swipe-left) ────────────────────────────────────────────
   function handleTouchStart(e) {
@@ -93,7 +79,7 @@ export default function ReminderItem({ reminder, onEdit }) {
           className={`flex-1 flex flex-col items-center justify-center gap-1
                       bg-green-500 text-white text-xs font-medium
                       transition-opacity ${isCompleting ? 'opacity-60' : ''}`}
-          onClick={() => { closeSwipe(); completeMutation.mutate(); }}
+          onClick={() => { closeSwipe(); completeMutation.mutate(reminder._id); }}
           disabled={isCompleting || isDeleting}
           aria-label="סמן כבוצע"
         >
@@ -108,7 +94,7 @@ export default function ReminderItem({ reminder, onEdit }) {
           className={`flex-1 flex flex-col items-center justify-center gap-1
                       bg-accent text-white text-xs font-medium
                       transition-opacity ${isDeleting ? 'opacity-60' : ''}`}
-          onClick={() => { closeSwipe(); deleteMutation.mutate(); }}
+          onClick={() => { closeSwipe(); deleteMutation.mutate(reminder._id); }}
           disabled={isCompleting || isDeleting}
           aria-label="מחק תזכורת"
         >

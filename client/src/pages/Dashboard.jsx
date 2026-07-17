@@ -3,6 +3,7 @@ import { useReminders } from '../hooks/useReminders';
 import ReminderList from '../components/ReminderList';
 import BottomNav from '../components/BottomNav';
 import AddReminderModal from '../components/AddReminderModal';
+import EditReminderModal from '../components/EditReminderModal';
 
 /**
  * Dashboard — Main page: active reminders timeline.
@@ -17,6 +18,7 @@ export default function Dashboard() {
   const { data: reminders, isLoading, isError, error, refetch, isFetching } = useReminders();
   const [modalOpen, setModalOpen] = useState(false);
   const [initialModalDate, setInitialModalDate] = useState(null);
+  const [editingReminder, setEditingReminder] = useState(null);
 
   function openModal(date = null) {
     setInitialModalDate(date);
@@ -105,10 +107,7 @@ export default function Dashboard() {
         {!isLoading && !isError && (
           <ReminderList
             reminders={reminders ?? []}
-            onEdit={(reminder) => {
-              // Phase 4: wire to EditReminderModal
-              console.log('Edit:', reminder._id);
-            }}
+            onEdit={(reminder) => setEditingReminder(reminder)}
             onQuickAdd={(sectionKey) => {
               // Pre-fill date based on section
               const dateMap = {
@@ -121,11 +120,15 @@ export default function Dashboard() {
         )}
       </main>
 
-      {/* ── AddReminderModal ─────────────────────────────────────────────────── */}
+      {/* ── Modals ─────────────────────────────────────────────────────────── */}
       <AddReminderModal
         isOpen={modalOpen}
         onClose={closeModal}
         initialDate={initialModalDate}
+      />
+      <EditReminderModal
+        reminder={editingReminder}
+        onClose={() => setEditingReminder(null)}
       />
 
       {/* ── Bottom navigation + FAB ───────────────────────────────────────────── */}
