@@ -1,175 +1,159 @@
+import { useState } from 'react';
 import { useReminders } from '../hooks/useReminders';
-import { groupRemindersByDay, parseDisplayTime, RECURRENCE_LABELS, isOverdue } from '../utils/dateHelpers';
+import ReminderList from '../components/ReminderList';
+import BottomNav from '../components/BottomNav';
+import AddReminderModal from '../components/AddReminderModal';
 
 /**
- * Dashboard — Phase 2 scaffold.
+ * Dashboard — Main page: active reminders timeline.
  *
- * Renders the active reminders list grouped by day.
- * Full BZ Reminder UI (ReminderItem, AddModal, BottomNav, swipe gestures)
- * will be layered on in Phase 3 & 4.
+ * Manages:
+ *   - fetching active reminders via useReminders()
+ *   - AddReminderModal open/close state
+ *   - initialDate passed to modal (from section quick-add "+")
+ *   - pull-to-refresh (via refetch)
  */
 export default function Dashboard() {
-  const { data: reminders, isLoading, isError, error, refetch } = useReminders();
+  const { data: reminders, isLoading, isError, error, refetch, isFetching } = useReminders();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [initialModalDate, setInitialModalDate] = useState(null);
 
-  const groups = reminders ? groupRemindersByDay(reminders) : [];
+  function openModal(date = null) {
+    setInitialModalDate(date);
+    setModalOpen(true);
+  }
+
+  function closeModal() {
+    setModalOpen(false);
+    setInitialModalDate(null);
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
 
-      {/* ── App Header ──────────────────────────────────────────────────── */}
-      <header className="bg-surface border-b border-divider px-4 py-3 pt-safe sticky top-0 z-20">
-        <div className="flex items-center justify-between">
-          <button className="text-textSecondary p-1">
-            {/* Menu icon placeholder */}
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-              <rect y="4" width="24" height="2" rx="1"/><rect y="11" width="24" height="2" rx="1"/><rect y="18" width="24" height="2" rx="1"/>
-            </svg>
-          </button>
-          <h1 className="text-lg font-medium text-textPrimary">תזכורות</h1>
-          <button className="text-textSecondary p-1">
-            {/* Search icon placeholder */}
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-          </button>
-        </div>
-      </header>
+      {/* ── App Header ────────────────────────────────────────────────────── */}
+      <header className="bg-surface border-b border-divider px-4 sticky top-0 z-20 pt-safe">
+        <div className="flex items-center justify-between h-14">
+          {/* Menu button (left in RTL = visually right) */}
+          <div className="flex items-center gap-3">
+            <button
+              className="text-textSecondary p-1 rounded-full hover:bg-gray-100 active:bg-gray-200 transition-colors"
+              aria-label="תפריט"
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
+              </svg>
+            </button>
 
-      {/* ── Content ─────────────────────────────────────────────────────── */}
-      <main className="flex-1 scroll-container">
-        {isLoading && (
-          <div className="flex items-center justify-center py-20 text-textSecondary">
-            <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full ml-2" />
-            טוען תזכורות…
+            <button
+              className="text-textSecondary p-1 rounded-full hover:bg-gray-100 active:bg-gray-200 transition-colors"
+              aria-label="אנשי קשר"
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+              </svg>
+            </button>
+
+            <button
+              className="text-textSecondary p-1 rounded-full hover:bg-gray-100 active:bg-gray-200 transition-colors"
+              aria-label="חיפוש"
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+            </button>
+          </div>
+
+          {/* Title (right in RTL) */}
+          <h1 className="text-lg font-semibold text-textPrimary">תזכורות</h1>
+        </div>
+
+        {/* Thin loading bar */}
+        {isFetching && !isLoading && (
+          <div className="h-0.5 bg-primary/20 -mx-4 relative overflow-hidden">
+            <div className="absolute inset-y-0 bg-primary animate-pulse w-1/3 rounded-full" />
           </div>
         )}
+      </header>
 
-        {isError && (
-          <div className="p-6 text-center">
-            <p className="text-accent font-medium mb-2">שגיאה בטעינת התזכורות</p>
-            <p className="text-textSecondary text-sm mb-4">{error?.message}</p>
+      {/* ── Content ─────────────────────────────────────────────────────────── */}
+      <main className="flex-1 scroll-container momentum-scroll scrollbar-hide">
+
+        {/* Loading skeleton */}
+        {isLoading && <LoadingSkeleton />}
+
+        {/* Error state */}
+        {isError && !isLoading && (
+          <div className="flex flex-col items-center justify-center py-20 px-6 text-center gap-4 animate-fade-in">
+            <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#F44336" strokeWidth="2">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+            </div>
+            <p className="font-medium text-textPrimary">שגיאה בטעינת התזכורות</p>
+            <p className="text-sm text-textSecondary">{error?.message}</p>
             <button
               onClick={refetch}
-              className="text-primary text-sm font-medium underline"
+              className="mt-1 px-5 py-2 bg-primary text-white rounded-ios text-sm font-medium active:scale-95 transition-transform"
             >
               נסה שנית
             </button>
           </div>
         )}
 
-        {!isLoading && !isError && groups.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-24 text-textSecondary gap-3">
-            <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-300">
-              <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/>
-              <path d="M12 6v6l4 2"/>
-            </svg>
-            <p className="text-base">אין תזכורות פעילות</p>
-            <p className="text-sm">לחץ על + כדי להוסיף תזכורת חדשה</p>
-          </div>
+        {/* Reminders list */}
+        {!isLoading && !isError && (
+          <ReminderList
+            reminders={reminders ?? []}
+            onEdit={(reminder) => {
+              // Phase 4: wire to EditReminderModal
+              console.log('Edit:', reminder._id);
+            }}
+            onQuickAdd={(sectionKey) => {
+              // Pre-fill date based on section
+              const dateMap = {
+                '__today__': new Date(),
+                '__tomorrow__': (() => { const d = new Date(); d.setDate(d.getDate() + 1); return d; })(),
+              };
+              openModal(dateMap[sectionKey] ?? null);
+            }}
+          />
         )}
-
-        {groups.map((group) => (
-          <section key={group.key}>
-            {/* Section header */}
-            <div className="section-header">
-              <span>{group.label}</span>
-              <button className="text-primary text-xl leading-none font-light">+</button>
-            </div>
-
-            {/* Reminder rows */}
-            {group.reminders.map((reminder) => {
-              const { hours, minutes } = parseDisplayTime(reminder.reminderAt);
-              const overdue = isOverdue(reminder);
-
-              return (
-                <div
-                  key={reminder._id}
-                  className={`reminder-row ${overdue ? 'border-r-2 border-r-accent' : ''}`}
-                >
-                  {/* Time */}
-                  <div className="min-w-[80px] text-right ml-4">
-                    <span className={`time-display ${overdue ? 'text-accent' : ''}`}>
-                      {hours}:{minutes}
-                    </span>
-                  </div>
-
-                  {/* Icons (recurrence, snooze) */}
-                  <div className="flex flex-col items-center mx-2 gap-0.5 text-textSecondary">
-                    {reminder.isRecurring && (
-                      <span title={RECURRENCE_LABELS[reminder.recurrence?.frequency]}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-primary">
-                          <polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/>
-                          <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
-                        </svg>
-                      </span>
-                    )}
-                    {reminder.snoozeCount > 0 && (
-                      <span className="text-amber-500">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z"/>
-                        </svg>
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Text */}
-                  <div className="flex-1">
-                    <p className={`text-base ${overdue ? 'text-accent font-medium' : 'text-textPrimary'}`}>
-                      {reminder.text}
-                    </p>
-                    {reminder.snoozeCount > 0 && (
-                      <span className="snooze-badge">
-                        נדחתה {reminder.snoozeCount}×
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </section>
-        ))}
       </main>
 
-      {/* ── FAB (Add button) — Phase 4 will hook this to AddReminderModal ── */}
-      <button className="fab" aria-label="הוסף תזכורת">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
-          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-        </svg>
-      </button>
+      {/* ── AddReminderModal ─────────────────────────────────────────────────── */}
+      <AddReminderModal
+        isOpen={modalOpen}
+        onClose={closeModal}
+        initialDate={initialModalDate}
+      />
 
-      {/* ── Bottom Navigation ─────────────────────────────────────────────── */}
-      <nav className="bottom-nav">
-        <button className="bottom-nav-tab">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
-          </svg>
-          <span>יותר</span>
-        </button>
+      {/* ── Bottom navigation + FAB ───────────────────────────────────────────── */}
+      <BottomNav onAddPress={() => openModal()} />
+    </div>
+  );
+}
 
-        <button className="bottom-nav-tab">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M20 3h-1V1h-2v2H7V1H5v2H4C2.9 3 2 3.9 2 5v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 18H4V8h16v13z"/>
-          </svg>
-          <span>לוח שנה</span>
-        </button>
+// ─── Loading skeleton ─────────────────────────────────────────────────────────
 
-        {/* Center FAB slot (empty — FAB is absolutely positioned) */}
-        <div className="flex-1" />
-
-        <button className="bottom-nav-tab">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
-          </svg>
-          <span>ימי הולדת</span>
-        </button>
-
-        <button className="bottom-nav-tab active">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
-          </svg>
-          <span>תזכורות</span>
-        </button>
-      </nav>
+function LoadingSkeleton() {
+  return (
+    <div className="animate-pulse">
+      {[0, 1].map((group) => (
+        <div key={group}>
+          {/* Section header skeleton */}
+          <div className="h-9 bg-gray-100 border-y border-divider px-4 flex items-center">
+            <div className="h-3 w-16 bg-gray-200 rounded" />
+          </div>
+          {/* Row skeletons */}
+          {[...Array(group === 0 ? 3 : 2)].map((_, i) => (
+            <div key={i} className="flex items-center px-4 py-4 border-b border-divider bg-white gap-4">
+              <div className="w-16 h-8 bg-gray-100 rounded" />
+              <div className="flex-1 h-4 bg-gray-100 rounded" />
+            </div>
+          ))}
+        </div>
+      ))}
     </div>
   );
 }
