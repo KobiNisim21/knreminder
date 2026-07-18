@@ -1,0 +1,52 @@
+{
+  "name": "KN תזכורות",
+  "short_name": "תזכורות",
+  "description": "אפליקציית תזכורות אישית — מהירה, נוחה, ומתחברת ל-Telegram",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FFFFFF",
+  "theme_color": "#2196F3",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "הוסף תזכורת",
+      "short_name": "הוסף",
+      "description": "צור תזכורת חדשה במהירות",
+      "url": "/?action=add",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "תזכורות שהושלמו",
+      "short_name": "הושלמו",
+      "description": "הצג תזכורות שהושלמו",
+      "url": "/completed",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
+  "screenshots": [],
+  "prefer_related_applications": false
+}
