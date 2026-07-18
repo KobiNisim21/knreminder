@@ -21,10 +21,24 @@ const PORT = process.env.PORT || 5000;
 // Security headers
 app.use(helmet());
 
-// CORS — allow requests from the React client
+// CORS — allow requests from the React client (dev + production)
+const ALLOWED_ORIGINS = [
+  'http://localhost:5173',          // Vite dev server
+  'http://localhost:4173',          // Vite preview
+  'https://knreminder.vercel.app',  // Vercel production
+  process.env.CLIENT_URL,           // optional override from .env
+].filter(Boolean);
+
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    origin: (origin, callback) => {
+      // Allow server-to-server requests (no Origin header) and known origins
+      if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS: origin "${origin}" not allowed`));
+      }
+    },
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,

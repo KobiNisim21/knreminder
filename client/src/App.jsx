@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
 import Completed from './pages/Completed';
+import CalendarView from './pages/CalendarView';
 import InstallPrompt from './components/InstallPrompt';
 
 function App() {
@@ -9,7 +10,7 @@ function App() {
       <Routes>
         <Route path="/"          element={<Dashboard />} />
         <Route path="/completed" element={<Completed />} />
-        <Route path="/calendar"  element={<div className="p-8 text-center text-textSecondary pt-safe">לוח שנה — בקרוב (Phase 8)</div>} />
+        <Route path="/calendar"  element={<CalendarView />} />
         <Route path="*"          element={<Navigate to="/" replace />} />
       </Routes>
 
