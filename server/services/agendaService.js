@@ -1,6 +1,9 @@
 const Agenda = require('agenda');
 const Reminder = require('../models/Reminder');
-const { sendReminderNotification } = require('./telegramService');
+// NOTE: telegramService is required lazily inside the job handler to avoid
+// the circular dependency (telegramService → agendaService → telegramService).
+// Node.js handles this correctly when the require is deferred to call-time.
+
 
 // ─── Agenda instance (singleton) ──────────────────────────────────────────────
 
@@ -34,7 +37,11 @@ function defineJobs(ag) {
   ag.define('send reminder', { priority: 'high', concurrency: 1 }, async (job) => {
     const { reminderId } = job.attrs.data;
 
+    // Lazy-load telegramService here (avoids circular require at module load time)
+    const { sendReminderNotification } = require('./telegramService');
+
     const reminder = await Reminder.findById(reminderId);
+
 
     // Guard: reminder might have been deleted or already completed
     if (!reminder || reminder.status !== 'active') {

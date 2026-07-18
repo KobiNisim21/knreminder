@@ -4,9 +4,10 @@
   "description": "KN Reminder - Node.js/Express backend with Agenda.js scheduler and Telegram Bot",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js",
-    "test": "jest --runInBand"
+    "start":          "node index.js",
+    "dev":            "nodemon index.js",
+    "test":           "jest --runInBand",
+    "test:telegram":  "node scripts/testTelegram.js"
   },
   "dependencies": {
     "agenda": "^5.0.0",

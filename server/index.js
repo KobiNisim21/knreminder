@@ -7,9 +7,11 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 
 const remindersRouter = require('./routes/reminders');
-const telegramRouter = require('./routes/telegram');
-const errorHandler = require('./middleware/errorHandler');
+const telegramRouter  = require('./routes/telegram');
+const errorHandler    = require('./middleware/errorHandler');
 const { startAgenda, stopAgenda } = require('./services/agendaService');
+const { startPolling, stopPolling, deleteWebhook } = require('./services/telegramService');
+
 
 // ─── App setup ────────────────────────────────────────────────────────────────
 
@@ -73,10 +75,24 @@ async function start() {
     console.log('✅ Agenda.js scheduler started');
 
     // 3. Start Express server
-    app.listen(PORT, () => {
+    app.listen(PORT, async () => {
       console.log(`🚀 KN Reminder server running on port ${PORT}`);
-      console.log(`   Health: http://localhost:${PORT}/api/health`);
+      console.log(`   Health:  http://localhost:${PORT}/api/health`);
+      console.log(`   Bot:     http://localhost:${PORT}/api/telegram/status`);
+
+      // 4. In development: start long-polling so Telegram button taps work locally
+      //    (No public HTTPS / ngrok needed — getUpdates polling handles it)
+      if (process.env.NODE_ENV !== 'production' && process.env.TELEGRAM_BOT_TOKEN) {
+        try {
+          await deleteWebhook();   // clear any registered webhook first
+          startPolling();          // non-blocking — runs in background
+          console.log('🤖 Telegram long-polling started (dev mode)');
+        } catch (err) {
+          console.warn('[Telegram] Could not start polling:', err.message);
+        }
+      }
     });
+
   } catch (err) {
     console.error('❌ Failed to start server:', err.message);
     process.exit(1);
@@ -90,6 +106,7 @@ start();
 async function shutdown(signal) {
   console.log(`\n[${signal}] Shutting down gracefully…`);
   try {
+    stopPolling();                          // stop Telegram polling loop
     await stopAgenda();
     await mongoose.connection.close();
     console.log('✅ Connections closed. Goodbye.');

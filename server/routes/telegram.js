@@ -1,143 +1,177 @@
-const express = require('express');
-const router = express.Router();
+/**
+ * routes/telegram.js
+ *
+ * Telegram-facing endpoints:
+ *   POST /api/telegram/webhook          — receives all Telegram updates (production)
+ *   POST /api/telegram/setup-webhook    — registers the webhook URL with Telegram
+ *   POST /api/telegram/delete-webhook   — removes webhook (enables local polling)
+ *   GET  /api/telegram/status           — bot health check + current webhook info
+ *   POST /api/telegram/test-notification— sends a test message immediately (dev/staging)
+ *   POST /api/telegram/fire/:id         — manually fires a specific reminder NOW (dev only)
+ */
 
-const Reminder = require('../models/Reminder');
-const { scheduleReminder, cancelReminderJob } = require('../services/agendaService');
+const express = require('express');
+const router  = express.Router();
+
+const Reminder       = require('../models/Reminder');
+const { scheduleReminder } = require('../services/agendaService');
 const {
-  answerCallbackQuery,
-  clearInlineKeyboard,
+  handleTelegramUpdate,
+  sendReminderNotification,
+  sendMessage,
   registerWebhook,
   deleteWebhook,
+  verifyBotToken,
 } = require('../services/telegramService');
 const asyncHandler = require('../middleware/asyncHandler');
 
 // ─── POST /api/telegram/webhook ───────────────────────────────────────────────
-// Telegram sends all updates (callback_query, message) to this endpoint.
-// This route MUST always return HTTP 200 — Telegram will retry failed deliveries
-// for up to 24 hours.
+// Telegram sends ALL updates (callback_query, message) here.
+// RULE: Must ALWAYS return HTTP 200 immediately, even on errors.
+//       Telegram retries failed deliveries for up to 24 hours.
+// ─────────────────────────────────────────────────────────────────────────────
 router.post(
   '/webhook',
   asyncHandler(async (req, res) => {
-    // Acknowledge immediately so Telegram doesn't retry
-    res.json({ ok: true });
+    // Acknowledge first — before any async work
+    res.status(200).json({ ok: true });
 
-    const update = req.body;
-    if (!update) return;
-
-    // ── Handle inline keyboard button taps ──────────────────────────────────────
-    if (update.callback_query) {
-      const { id: callbackQueryId, data, message } = update.callback_query;
-      const chatId = message?.chat?.id;
-      const messageId = message?.message_id;
-
-      try {
-        await handleCallbackQuery({ callbackQueryId, data, chatId, messageId });
-      } catch (err) {
-        console.error('[Telegram Webhook] Callback query error:', err.message);
-      }
-    }
-
-    // ── Handle /start command (useful for first-time setup) ─────────────────────
-    if (update.message?.text === '/start') {
-      const chatId = update.message.chat.id;
-      const { sendMessage } = require('../services/telegramService');
-      await sendMessage(
-        chatId,
-        `👋 *שלום!*\n\nאני בוט התזכורות שלך.\nאני אשלח לך תזכורות בזמן שתקבע באפליקציה.\n\n_Chat ID שלך: ${chatId}_`
-      );
+    // Delegate to the shared update handler (also used by polling)
+    try {
+      await handleTelegramUpdate(req.body);
+    } catch (err) {
+      // Log but never throw — Telegram already got its 200
+      console.error('[Telegram Webhook] Unhandled error:', err.message);
     }
   })
 );
 
-// ─── Callback query handler ───────────────────────────────────────────────────
+// ─── GET /api/telegram/status ─────────────────────────────────────────────────
+// Returns bot identity + webhook info. Use this to verify credentials work.
+// Example: curl http://localhost:5000/api/telegram/status
+// ─────────────────────────────────────────────────────────────────────────────
+router.get(
+  '/status',
+  asyncHandler(async (req, res) => {
+    const missingVars = [];
+    if (!process.env.TELEGRAM_BOT_TOKEN) missingVars.push('TELEGRAM_BOT_TOKEN');
+    if (!process.env.TELEGRAM_CHAT_ID)   missingVars.push('TELEGRAM_CHAT_ID');
 
-async function handleCallbackQuery({ callbackQueryId, data, chatId, messageId }) {
-  if (!data) return;
-
-  // Parse callback_data format:
-  //   snooze_<minutes>_<reminderId>  →  ['snooze', '15', '<id>']
-  //   done_<reminderId>              →  ['done', '<id>']
-  const parts = data.split('_');
-  const action = parts[0];
-
-  if (action === 'snooze') {
-    const minutes = parseInt(parts[1], 10);
-    const reminderId = parts.slice(2).join('_');
-
-    const reminder = await Reminder.findById(reminderId);
-    if (!reminder || reminder.status === 'completed') {
-      await answerCallbackQuery(callbackQueryId, '⚠️ תזכורת זו כבר לא פעילה', true);
-      return;
+    if (missingVars.length > 0) {
+      return res.status(503).json({
+        ok:      false,
+        message: `חסרות משתני סביבה: ${missingVars.join(', ')}`,
+        missing: missingVars,
+      });
     }
 
-    const newTime = new Date(Date.now() + minutes * 60 * 1000);
-    reminder.reminderAt = newTime;
-    reminder.snoozeCount += 1;
-    reminder.status = 'active';
-    reminder.notified = false;
-    await reminder.save();
+    // Call Telegram API to verify the token is valid
+    const botInfo = await verifyBotToken();
 
-    await scheduleReminder(reminder);
-    await answerCallbackQuery(
-      callbackQueryId,
-      `⏰ יזכיר אותך בעוד ${minutes === 60 ? 'שעה' : `${minutes} דקות`}`,
-      false
-    );
-    await clearInlineKeyboard(chatId, messageId);
+    res.json({
+      ok:       true,
+      bot:      botInfo,
+      chat_id:  process.env.TELEGRAM_CHAT_ID,
+      env:      process.env.NODE_ENV,
+      message:  '✅ Bot token is valid and credentials are configured.',
+    });
+  })
+);
 
-    console.log(`[Telegram] Snoozed reminder ${reminderId} by ${minutes} minutes`);
+// ─── POST /api/telegram/test-notification ────────────────────────────────────
+// Sends a real Telegram message immediately to verify the full pipeline.
+// Use this to confirm your TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are correct.
+// Example: curl -X POST http://localhost:5000/api/telegram/test-notification
+// ─────────────────────────────────────────────────────────────────────────────
+router.post(
+  '/test-notification',
+  asyncHandler(async (req, res) => {
+    const chatId = process.env.TELEGRAM_CHAT_ID;
+    if (!process.env.TELEGRAM_BOT_TOKEN || !chatId) {
+      return res.status(503).json({
+        ok:      false,
+        message: 'TELEGRAM_BOT_TOKEN ו-TELEGRAM_CHAT_ID חייבים להיות מוגדרים ב-.env',
+      });
+    }
 
-  } else if (action === 'done') {
-    const reminderId = parts.slice(1).join('_');
+    // Build a fake reminder-like object for the test
+    const fakeReminder = {
+      _id:         { toString: () => 'TEST000000000000000000' },
+      text:        req.body?.text || '🧪 זוהי תזכורת בדיקה מ-KN Reminder',
+      reminderAt:  new Date(),
+      isRecurring: false,
+      snoozeCount: 0,
+    };
 
-    const reminder = await Reminder.findById(reminderId);
+    await sendReminderNotification(fakeReminder);
+
+    res.json({
+      ok:      true,
+      message: `✅ הודעת בדיקה נשלחה ל-chat_id ${chatId}. בדוק את טלגרם שלך!`,
+    });
+  })
+);
+
+// ─── POST /api/telegram/fire/:id ─────────────────────────────────────────────
+// Immediately sends the Telegram notification for an existing reminder.
+// Useful for testing the full Agenda → Telegram → inline-buttons pipeline.
+// Example: curl -X POST http://localhost:5000/api/telegram/fire/6abc123...
+// ─────────────────────────────────────────────────────────────────────────────
+router.post(
+  '/fire/:id',
+  asyncHandler(async (req, res) => {
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(403).json({
+        ok:      false,
+        message: 'נקודת קצה זו זמינה בסביבת פיתוח בלבד',
+      });
+    }
+
+    const reminder = await Reminder.findById(req.params.id);
     if (!reminder) {
-      await answerCallbackQuery(callbackQueryId, '⚠️ תזכורת לא נמצאה', true);
-      return;
+      return res.status(404).json({ ok: false, message: 'תזכורת לא נמצאה' });
     }
-    if (reminder.status === 'completed') {
-      await answerCallbackQuery(callbackQueryId, '✅ תזכורת כבר הושלמה');
-      await clearInlineKeyboard(chatId, messageId);
-      return;
+    if (reminder.status !== 'active') {
+      return res.status(400).json({
+        ok:      false,
+        message: `תזכורת במצב "${reminder.status}" — לא ניתן לשגר`,
+      });
     }
 
-    await cancelReminderJob(reminderId);
-    reminder.status = 'completed';
-    reminder.completedAt = new Date();
-    await reminder.save(); // pre-save hook sets expiresAt
+    await sendReminderNotification(reminder);
 
-    await answerCallbackQuery(callbackQueryId, '✅ תזכורת סומנה כבוצע!', false);
-    await clearInlineKeyboard(chatId, messageId);
-
-    console.log(`[Telegram] Marked reminder ${reminderId} as completed via Telegram`);
-  } else {
-    // Unknown action — acknowledge silently
-    await answerCallbackQuery(callbackQueryId, '');
-  }
-}
+    res.json({
+      ok:       true,
+      message:  `✅ הודעה נשלחה עבור: "${reminder.text}"`,
+      reminder: { id: reminder._id, text: reminder.text, reminderAt: reminder.reminderAt },
+    });
+  })
+);
 
 // ─── POST /api/telegram/setup-webhook ────────────────────────────────────────
-// Call this once after deploying to production to register the webhook URL.
+// Registers the webhook URL with Telegram (call once after production deploy).
 // Body: { "url": "https://your-railway-app.railway.app" }
+// ─────────────────────────────────────────────────────────────────────────────
 router.post(
   '/setup-webhook',
   asyncHandler(async (req, res) => {
     const { url } = req.body;
     if (!url) {
-      return res.status(400).json({ success: false, message: 'נא לספק URL' });
+      return res.status(400).json({ ok: false, message: 'נא לספק שדה "url" בגוף הבקשה' });
     }
     const result = await registerWebhook(url);
-    res.json({ success: true, result });
+    res.json({ ok: true, result });
   })
 );
 
 // ─── POST /api/telegram/delete-webhook ───────────────────────────────────────
-// Removes the webhook (use for local dev / testing with getUpdates polling).
+// Removes the webhook (switches back to long-polling mode for local dev).
+// ─────────────────────────────────────────────────────────────────────────────
 router.post(
   '/delete-webhook',
   asyncHandler(async (req, res) => {
     const result = await deleteWebhook();
-    res.json({ success: true, result });
+    res.json({ ok: true, result });
   })
 );
 
