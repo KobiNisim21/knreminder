@@ -1,0 +1,11 @@
+# KN Reminder — Nixpacks build config for Railway
+# Tells Railway's builder to use Node.js 20 and install only server/ dependencies.
+
+[phases.setup]
+nixPkgs = ["nodejs_20"]
+
+[phases.install]
+cmds = ["npm ci --omit=dev"]
+
+[start]
+cmd = "node index.js"
