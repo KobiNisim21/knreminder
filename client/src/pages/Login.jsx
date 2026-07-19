@@ -11,11 +11,21 @@ import { authApi } from '../api/reminders';
  * verified identity is stored.
  *
  * Dev fallback: when VITE_TELEGRAM_BOT_USERNAME is not configured (pure local
- * dev), we can't render the widget, so we show a plain chatId entry field. The
- * server only honors this path when NODE_ENV !== 'production'.
+ * dev), we can't render the widget, so we show a plain chatId entry field. This
+ * input is gated strictly to hostname === 'localhost' so it can never surface on
+ * the live site, even if the bot username env var is missing in production. The
+ * server also only honors this path when NODE_ENV !== 'production'.
  */
 
 const BOT_USERNAME = import.meta.env.VITE_TELEGRAM_BOT_USERNAME || '';
+
+// Hard environment gate for the manual Chat ID fallback. This input exists only
+// so a developer can sign in on their machine without the Telegram widget; it
+// must NEVER render on the live site. We key it strictly off the hostname, so
+// even a misconfigured production build (missing VITE_TELEGRAM_BOT_USERNAME)
+// can't expose it. The server independently rejects dev logins when
+// NODE_ENV === 'production', so this is defense-in-depth, not the only guard.
+const IS_LOCALHOST = window.location.hostname === 'localhost';
 
 export default function Login() {
   const { login } = useAuth();
@@ -101,11 +111,14 @@ export default function Login() {
           הנתונים שלך פרטיים ומשויכים לחשבון הטלגרם שלך בלבד.
         </p>
 
-        {/* Primary: Telegram Login Widget */}
-        {BOT_USERNAME ? (
+        {/* Primary: Telegram Login Widget — the only auth path in production. */}
+        {BOT_USERNAME && (
           <div className="flex justify-center min-h-[48px]" ref={widgetRef} />
-        ) : (
-          // Dev fallback: manual chatId entry (server rejects this in production)
+        )}
+
+        {/* Dev fallback: manual chatId entry. Rendered ONLY on localhost so it
+            can never appear on the live site, regardless of env config. */}
+        {IS_LOCALHOST && !BOT_USERNAME && (
           <form onSubmit={handleDevLogin} className="text-right">
             <label className="block text-[13px] text-textSecondary mb-1.5 px-1">
               Chat ID (מצב פיתוח)
@@ -132,6 +145,14 @@ export default function Login() {
               שלח <code>/start</code> לבוט בטלגרם כדי לקבל את ה-Chat ID שלך.
             </p>
           </form>
+        )}
+
+        {/* Safety net: production build with no widget configured. Rather than
+            leak the dev input, tell the user auth isn't available. */}
+        {!BOT_USERNAME && !IS_LOCALHOST && (
+          <p className="text-[15px] text-textSecondary" role="alert">
+            ההתחברות אינה זמינה כרגע. נסה שוב מאוחר יותר.
+          </p>
         )}
 
         {error && (
