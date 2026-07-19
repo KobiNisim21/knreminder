@@ -16,11 +16,11 @@ export default function BottomNav({ onAddPress, anyModalOpen = false }) {
   const tabs = [
     {
       id: 'more',
-      label: 'יותר',
-      path: null,
+      label: 'עוד',
+      path: '/more',
       icon: (
         <svg width="23" height="23" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+          <circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>
         </svg>
       ),
     },
@@ -37,12 +37,14 @@ export default function BottomNav({ onAddPress, anyModalOpen = false }) {
     // Center slot — FAB occupies this space
     null,
     {
-      id: 'completed',
-      label: 'הושלמו',
-      path: '/completed',
+      id: 'birthdays',
+      label: 'ימי הולדת',
+      path: '/birthdays',
       icon: (
-        <svg width="23" height="23" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
+        <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8"/>
+          <path d="M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1"/>
+          <path d="M2 21h20"/><path d="M7 8v2M12 8v2M17 8v2"/><path d="M7 4h.01M12 3h.01M17 4h.01"/>
         </svg>
       ),
     },

@@ -39,3 +39,22 @@ export function useCompletedReminders() {
     placeholderData: [],
   });
 }
+
+/**
+ * useBirthdays — React Query hook for the birthdays feed.
+ *
+ * Polls every 60s like the main reminders list so the feed stays fresh
+ * after a birthday rolls over to next year via the recurrence engine.
+ */
+export function useBirthdays() {
+  return useQuery({
+    queryKey: ['reminders', 'birthdays'],
+    queryFn: async () => {
+      const body = await remindersApi.getBirthdays();
+      return Array.isArray(body) ? body : (Array.isArray(body?.data) ? body.data : []);
+    },
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+    placeholderData: [],
+  });
+}

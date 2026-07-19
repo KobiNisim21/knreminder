@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useReminders } from '../hooks/useReminders';
+import { useReminderMutations } from '../hooks/useReminderMutations';
 import ReminderList from '../components/ReminderList';
 import BottomNav from '../components/BottomNav';
 import AddReminderModal from '../components/AddReminderModal';
 import EditReminderModal from '../components/EditReminderModal';
+import ActionBar from '../components/ActionBar';
 
 /**
  * Dashboard — Main page: active reminders timeline.
@@ -16,9 +18,11 @@ import EditReminderModal from '../components/EditReminderModal';
  */
 export default function Dashboard() {
   const { data: reminders, isLoading, isError, error, refetch, isFetching } = useReminders();
+  const { completeMutation, snoozeMutation, deleteMutation } = useReminderMutations();
   const [modalOpen, setModalOpen] = useState(false);
   const [initialModalDate, setInitialModalDate] = useState(null);
   const [editingReminder, setEditingReminder] = useState(null);
+  const [selectedReminder, setSelectedReminder] = useState(null);
 
   function openModal(date = null) {
     setInitialModalDate(date);
@@ -28,6 +32,11 @@ export default function Dashboard() {
   function closeModal() {
     setModalOpen(false);
     setInitialModalDate(null);
+  }
+
+  // Tap a row → toggle selection (parent shows the ActionBar).
+  function toggleSelect(reminder) {
+    setSelectedReminder((prev) => (prev?._id === reminder._id ? null : reminder));
   }
 
   return (
@@ -107,7 +116,8 @@ export default function Dashboard() {
         {!isLoading && !isError && (
           <ReminderList
             reminders={reminders ?? []}
-            onEdit={(reminder) => setEditingReminder(reminder)}
+            selectedId={selectedReminder?._id ?? null}
+            onSelect={toggleSelect}
             onQuickAdd={(sectionKey) => {
               // Pre-fill date based on section
               const dateMap = {
@@ -119,6 +129,16 @@ export default function Dashboard() {
           />
         )}
       </main>
+
+      {/* ── Contextual action bar (shown when a row is selected) ────────────── */}
+      <ActionBar
+        reminder={selectedReminder}
+        onClose={() => setSelectedReminder(null)}
+        onEdit={(reminder) => setEditingReminder(reminder)}
+        onComplete={(id) => completeMutation.mutate(id)}
+        onSnooze={(id, minutes) => snoozeMutation.mutate({ id, minutes })}
+        onRemove={(id) => deleteMutation.mutate(id)}
+      />
 
       {/* ── Modals ─────────────────────────────────────────────────────────── */}
       <AddReminderModal
@@ -134,7 +154,7 @@ export default function Dashboard() {
       {/* ── Bottom navigation + FAB ─────────────────────────────────────────── */}
       <BottomNav
         onAddPress={() => openModal()}
-        anyModalOpen={modalOpen || !!editingReminder}
+        anyModalOpen={modalOpen || !!editingReminder || !!selectedReminder}
       />
     </div>
   );

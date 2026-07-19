@@ -12,9 +12,27 @@ router.get(
   asyncHandler(async (req, res) => {
     const reminders = await Reminder.find({
       status: { $in: ['active', 'snoozed'] },
+      // Birthdays live in their own dedicated feed — keep them out of the
+      // main reminders timeline. { $ne: 'birthday' } also matches legacy docs
+      // where `type` is undefined.
+      type: { $ne: 'birthday' },
     }).sort({ reminderAt: 1 });
 
     res.json({ success: true, count: reminders.length, data: reminders });
+  })
+);
+
+// ─── GET /api/reminders/birthdays ─────────────────────────────────────────────
+// Returns all birthday items, sorted by their next upcoming occurrence.
+router.get(
+  '/birthdays',
+  asyncHandler(async (req, res) => {
+    const birthdays = await Reminder.find({
+      type: 'birthday',
+      status: { $in: ['active', 'snoozed'] },
+    }).sort({ reminderAt: 1 });
+
+    res.json({ success: true, count: birthdays.length, data: birthdays });
   })
 );
 
@@ -49,7 +67,10 @@ router.get(
 router.post(
   '/',
   asyncHandler(async (req, res) => {
-    const { text, reminderAt, isRecurring, recurrence } = req.body;
+    const { text, reminderAt, isRecurring, recurrence, type, personName, birthYear } =
+      req.body;
+
+    const isBirthday = type === 'birthday';
 
     // Validate that the reminder time is in the future
     if (new Date(reminderAt) <= new Date()) {
@@ -59,20 +80,42 @@ router.post(
       });
     }
 
-    // Validate recurrence payload when isRecurring is true
-    if (isRecurring && (!recurrence || !recurrence.frequency)) {
+    // Birthday-specific validation
+    if (isBirthday && !personName?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'נא להזין שם עבור יום ההולדת',
+      });
+    }
+
+    // For standard reminders, validate recurrence payload when isRecurring is true.
+    // Birthdays are always yearly-recurring regardless of the isRecurring flag.
+    if (!isBirthday && isRecurring && (!recurrence || !recurrence.frequency)) {
       return res.status(400).json({
         success: false,
         message: 'נא לבחור תדירות חזרה',
       });
     }
 
-    const reminder = await Reminder.create({
-      text,
-      reminderAt: new Date(reminderAt),
-      isRecurring: isRecurring || false,
-      recurrence: isRecurring ? recurrence : null,
-    });
+    const reminder = await Reminder.create(
+      isBirthday
+        ? {
+            text,
+            type: 'birthday',
+            personName: personName.trim(),
+            birthYear: birthYear ?? null,
+            reminderAt: new Date(reminderAt),
+            isRecurring: true,
+            recurrence: { frequency: 'yearly' },
+          }
+        : {
+            text,
+            type: 'reminder',
+            reminderAt: new Date(reminderAt),
+            isRecurring: isRecurring || false,
+            recurrence: isRecurring ? recurrence : null,
+          }
+    );
 
     // Schedule the notification job in Agenda
     await scheduleReminder(reminder);
@@ -97,10 +140,15 @@ router.patch(
       });
     }
 
-    const { text, reminderAt, isRecurring, recurrence } = req.body;
+    const { text, reminderAt, isRecurring, recurrence, personName, birthYear } =
+      req.body;
+
+    const isBirthday = reminder.type === 'birthday';
 
     let timeChanged = false;
     if (text !== undefined) reminder.text = text;
+    if (personName !== undefined) reminder.personName = personName;
+    if (birthYear !== undefined) reminder.birthYear = birthYear;
     if (reminderAt !== undefined) {
       const newTime = new Date(reminderAt);
       if (newTime <= new Date()) {
@@ -113,7 +161,8 @@ router.patch(
       reminder.reminderAt = newTime;
       reminder.notified = false;
     }
-    if (isRecurring !== undefined) {
+    // Birthdays stay yearly-recurring; only standard reminders can toggle recurrence.
+    if (!isBirthday && isRecurring !== undefined) {
       reminder.isRecurring = isRecurring;
       reminder.recurrence = isRecurring ? recurrence : null;
     }

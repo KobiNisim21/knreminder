@@ -10,7 +10,7 @@ import ReminderItem from './ReminderItem';
  *
  * Each section header has a blue "+" quick-add button.
  */
-export default function ReminderList({ reminders, onEdit, onQuickAdd }) {
+export default function ReminderList({ reminders, selectedId, onSelect, onQuickAdd }) {
   const groups = groupRemindersByDay(reminders);
 
   if (groups.length === 0) {
@@ -42,7 +42,8 @@ export default function ReminderList({ reminders, onEdit, onQuickAdd }) {
             <ReminderItem
               key={reminder._id}
               reminder={reminder}
-              onEdit={onEdit}
+              isSelected={selectedId === reminder._id}
+              onSelect={onSelect}
             />
           ))}
         </section>

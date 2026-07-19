@@ -164,3 +164,52 @@ export const RECURRENCE_LABELS = {
 export function isOverdue(reminder) {
   return reminder.status === 'active' && new Date(reminder.reminderAt) < new Date();
 }
+
+// ─── Birthdays ─────────────────────────────────────────────────────────────────
+
+/**
+ * Computes the age a person will turn on their upcoming birthday occurrence.
+ *
+ * The birthday's reminderAt already points at the next upcoming occurrence
+ * (the recurrence engine advances it each year), so the age is simply the
+ * occurrence year minus the birth year.
+ *
+ * @param {number|null} birthYear
+ * @param {string|Date} occurrenceDate - the upcoming reminderAt
+ * @returns {number|null} the age they turn, or null if birthYear unknown
+ */
+export function computeUpcomingAge(birthYear, occurrenceDate) {
+  if (!birthYear) return null;
+  const occurrenceYear = new Date(occurrenceDate).getFullYear();
+  const age = occurrenceYear - birthYear;
+  return age >= 0 ? age : null;
+}
+
+/**
+ * Builds the birthday row label in the reference layout: "y/o 57 ,אמא".
+ * Falls back gracefully when age or name is missing.
+ *
+ * @param {object} b - birthday reminder document
+ * @returns {string}
+ */
+export function formatBirthdayLabel(b) {
+  const name = b.personName || b.text || '';
+  const age = computeUpcomingAge(b.birthYear, b.reminderAt);
+  if (age === null) return name;
+  return `y/o ${age} ,${name}`;
+}
+
+/**
+ * Formats a birthday's date as an uppercase short header,
+ * matching the reference UI (e.g. "THU 2 APR 2026").
+ */
+export function formatBirthdayDateHeader(date) {
+  return new Intl.DateTimeFormat('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
+    .format(new Date(date))
+    .toUpperCase();
+}

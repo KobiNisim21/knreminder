@@ -1,10 +1,12 @@
 import { useState, useMemo } from 'react';
 import { useCalendarData, toDateKey } from '../hooks/useCalendarData';
+import { useReminderMutations } from '../hooks/useReminderMutations';
 import MonthGrid from '../components/MonthGrid';
 import ReminderItem from '../components/ReminderItem';
 import BottomNav from '../components/BottomNav';
 import AddReminderModal from '../components/AddReminderModal';
 import EditReminderModal from '../components/EditReminderModal';
+import ActionBar from '../components/ActionBar';
 
 // Full Hebrew day names (Sunday=0 … Saturday=6)
 const DAY_NAMES_FULL = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
@@ -37,8 +39,14 @@ export default function CalendarView() {
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [addModalDate, setAddModalDate] = useState(null);
   const [editingReminder, setEditingReminder] = useState(null);
+  const [selectedReminder, setSelectedReminder] = useState(null);
 
   const { remindersByDate, isLoading, isError, error, refetch } = useCalendarData();
+  const { completeMutation, snoozeMutation, deleteMutation } = useReminderMutations();
+
+  function toggleSelect(reminder) {
+    setSelectedReminder((prev) => (prev?._id === reminder._id ? null : reminder));
+  }
 
   // Reminders for the currently selected day
   const selectedKey       = selectedDate ? toDateKey(selectedDate) : null;
@@ -168,7 +176,8 @@ export default function CalendarView() {
                 <ReminderItem
                   key={reminder._id}
                   reminder={reminder}
-                  onEdit={setEditingReminder}
+                  isSelected={selectedReminder?._id === reminder._id}
+                  onSelect={toggleSelect}
                 />
               ))}
           </div>
@@ -203,6 +212,16 @@ export default function CalendarView() {
         )}
       </main>
 
+      {/* ── Contextual action bar ────────────────────────────────────────────── */}
+      <ActionBar
+        reminder={selectedReminder}
+        onClose={() => setSelectedReminder(null)}
+        onEdit={(reminder) => setEditingReminder(reminder)}
+        onComplete={(id) => completeMutation.mutate(id)}
+        onSnooze={(id, minutes) => snoozeMutation.mutate({ id, minutes })}
+        onRemove={(id) => deleteMutation.mutate(id)}
+      />
+
       {/* ── Modals ───────────────────────────────────────────────────────────── */}
       <AddReminderModal
         isOpen={addModalOpen}
@@ -217,7 +236,7 @@ export default function CalendarView() {
       {/* ── Bottom navigation ────────────────────────────────────────────────── */}
       <BottomNav
         onAddPress={() => openAddForDay(selectedDate ?? today)}
-        anyModalOpen={addModalOpen || !!editingReminder}
+        anyModalOpen={addModalOpen || !!editingReminder || !!selectedReminder}
       />
 
     </div>

@@ -39,6 +39,9 @@ export const remindersApi = {
   /** Get completed reminders (within 90-day retention) */
   getCompleted: () => api.get('/reminders/completed'),
 
+  /** Get all birthday items, sorted by next upcoming occurrence */
+  getBirthdays: () => api.get('/reminders/birthdays'),
+
   /** Get a single reminder by ID */
   getById: (id) => api.get(`/reminders/${id}`),
 

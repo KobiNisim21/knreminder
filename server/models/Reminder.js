@@ -30,6 +30,34 @@ const ReminderSchema = new mongoose.Schema(
       maxlength: [500, 'הטקסט ארוך מדי (מקסימום 500 תווים)'],
     },
 
+    // ── Item type ────────────────────────────────────────────────────────────────
+    // 'reminder'  → a standard one-time / recurring reminder
+    // 'birthday'  → a person's birthday. Always yearly-recurring; drives the
+    //               dedicated Birthdays feed and age computation.
+    type: {
+      type: String,
+      enum: ['reminder', 'birthday'],
+      default: 'reminder',
+    },
+
+    // ── Birthday-only fields ───────────────────────────────────────────────────
+    // The person whose birthday it is (e.g. "אמא"). Used for the "y/o 57 ,אמא"
+    // row layout. Optional for standard reminders.
+    personName: {
+      type: String,
+      trim: true,
+      maxlength: [120, 'השם ארוך מדי'],
+      default: null,
+    },
+    // The person's year of birth. Used to compute their upcoming age.
+    // null for non-birthday reminders.
+    birthYear: {
+      type: Number,
+      min: [1900, 'שנת לידה לא תקינה'],
+      max: [new Date().getFullYear(), 'שנת לידה לא יכולה להיות בעתיד'],
+      default: null,
+    },
+
     // The exact UTC datetime at which the notification fires
     reminderAt: {
       type: Date,
@@ -83,6 +111,9 @@ ReminderSchema.index({ status: 1, notified: 1, reminderAt: 1 });
 
 // Index for sorted dashboard listing
 ReminderSchema.index({ status: 1, reminderAt: 1 });
+
+// Index for the birthdays feed (type + upcoming date)
+ReminderSchema.index({ type: 1, reminderAt: 1 });
 
 // ─── Virtuals ─────────────────────────────────────────────────────────────────
 
