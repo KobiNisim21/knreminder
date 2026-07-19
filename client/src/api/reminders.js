@@ -12,9 +12,32 @@ const api = axios.create({
   timeout: 10000,
 });
 
-// ─── Request interceptor (add auth headers later if needed) ──────────────────
+// ─── Auth: attach the signed-in user's chatId to every request ────────────────
+// AuthContext calls setAuthChatId() on login/logout/refresh. We keep the value
+// in a module-level variable (seeded from LocalStorage so the very first request
+// after a page load is already authenticated, before React mounts) and stamp it
+// onto each outgoing request as `x-user-chat-id`. The server's resolveUser
+// middleware reads this header to scope all data to the user.
+let currentChatId = null;
+try {
+  const raw = localStorage.getItem('knr.auth.v1');
+  if (raw) currentChatId = JSON.parse(raw)?.chatId ?? null;
+} catch {
+  /* ignore malformed/absent storage */
+}
+
+/** Set (or clear, with null) the chatId attached to all subsequent requests. */
+export function setAuthChatId(chatId) {
+  currentChatId = chatId ? String(chatId) : null;
+}
+
 api.interceptors.request.use(
-  (config) => config,
+  (config) => {
+    if (currentChatId) {
+      config.headers['x-user-chat-id'] = currentChatId;
+    }
+    return config;
+  },
   (error) => Promise.reject(error)
 );
 
@@ -79,6 +102,18 @@ export const remindersApi = {
    * @param {{ items: Array }} payload
    */
   import: (payload) => api.post('/reminders/import', payload),
+};
+
+// ─── Auth API ─────────────────────────────────────────────────────────────────
+
+export const authApi = {
+  /**
+   * Verify a Telegram Login Widget payload server-side.
+   * @param {object} telegramUser - raw object from the Telegram widget, OR
+   *   { id, first_name, dev: true } for the local-dev fallback path.
+   * @returns {Promise<{ success, user, dev? }>}
+   */
+  loginWithTelegram: (telegramUser) => api.post('/auth/telegram', telegramUser),
 };
 
 export default api;

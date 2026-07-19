@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import BottomNav from '../components/BottomNav';
+import { useAuth } from '../context/AuthContext';
 
 /**
  * MoreView — The "יותר" (More) tab.
@@ -18,6 +19,13 @@ import BottomNav from '../components/BottomNav';
  */
 export default function MoreView() {
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  function handleLogout() {
+    if (window.confirm('להתנתק מהחשבון? נתונים מקומיים יימחקו מהמכשיר.')) {
+      logout(); // purges LocalStorage + clears React Query cache → App shows Login
+    }
+  }
 
   const groups = [
     {
@@ -54,6 +62,16 @@ export default function MoreView() {
         },
       ],
     },
+    {
+      items: [
+        {
+          id: 'logout',
+          label: 'התנתק',
+          danger: true,
+          onClick: handleLogout,
+        },
+      ],
+    },
   ];
 
   return (
@@ -87,14 +105,23 @@ export default function MoreView() {
                   key={item.id}
                   onClick={item.onClick}
                   className={`w-full flex items-center justify-between px-5 py-3.5
-                              text-right active:bg-gray-50 transition-colors
+                              ${item.danger ? 'text-center justify-center' : 'text-right'}
+                              active:bg-gray-50 transition-colors
                               ${idx > 0 ? 'border-t border-divider' : ''}`}
                 >
-                  <span className="text-[16px] text-textPrimary">{item.label}</span>
-                  <span className="flex items-center gap-2">
-                    {item.trailing}
-                    <ChevronIcon />
+                  <span
+                    className={`text-[16px] ${
+                      item.danger ? 'text-red-500 font-medium' : 'text-textPrimary'
+                    }`}
+                  >
+                    {item.label}
                   </span>
+                  {!item.danger && (
+                    <span className="flex items-center gap-2">
+                      {item.trailing}
+                      <ChevronIcon />
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
@@ -111,8 +138,17 @@ export default function MoreView() {
           </button>
         </div>
 
-        {/* Version footer */}
-        <p className="text-center text-xs text-textDisabled py-6">KN Reminder · v1.0.0</p>
+        {/* Version + signed-in identity footer */}
+        <p className="text-center text-xs text-textDisabled py-6">
+          KN Reminder · v1.0.0
+          {user?.chatId && (
+            <>
+              <br />
+              {user.firstName ? `${user.firstName} · ` : ''}
+              {user.username ? `@${user.username}` : `ID ${user.chatId}`}
+            </>
+          )}
+        </p>
       </main>
 
       <BottomNav onAddPress={() => navigate('/')} anyModalOpen={false} />

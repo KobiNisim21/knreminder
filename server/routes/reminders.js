@@ -5,6 +5,11 @@ const router = express.Router();
 const Reminder = require('../models/Reminder');
 const { scheduleReminder, cancelReminderJob } = require('../services/agendaService');
 const asyncHandler = require('../middleware/asyncHandler');
+const resolveUser = require('../middleware/resolveUser');
+
+// Every reminder route is per-user. resolveUser sets req.chatId (or 401s), and
+// all queries below scope by it so users can only ever touch their own data.
+router.use(resolveUser);
 
 // ─── GET /api/reminders ───────────────────────────────────────────────────────
 // Returns all active (and snoozed) reminders, sorted ascending by reminderAt.
@@ -12,6 +17,7 @@ router.get(
   '/',
   asyncHandler(async (req, res) => {
     const reminders = await Reminder.find({
+      chatId: req.chatId,
       status: { $in: ['active', 'snoozed'] },
       // Birthdays live in their own dedicated feed — keep them out of the
       // main reminders timeline. { $ne: 'birthday' } also matches legacy docs
@@ -29,6 +35,7 @@ router.get(
   '/birthdays',
   asyncHandler(async (req, res) => {
     const birthdays = await Reminder.find({
+      chatId: req.chatId,
       type: 'birthday',
       status: { $in: ['active', 'snoozed'] },
     }).sort({ reminderAt: 1 });
@@ -43,9 +50,10 @@ router.get(
 router.get(
   '/completed',
   asyncHandler(async (req, res) => {
-    const reminders = await Reminder.find({ status: 'completed' }).sort({
-      completedAt: -1,
-    });
+    const reminders = await Reminder.find({
+      chatId: req.chatId,
+      status: 'completed',
+    }).sort({ completedAt: -1 });
 
     res.json({ success: true, count: reminders.length, data: reminders });
   })
@@ -57,7 +65,9 @@ router.get(
 router.get(
   '/export',
   asyncHandler(async (req, res) => {
-    const items = await Reminder.find({}).sort({ reminderAt: 1 }).lean();
+    const items = await Reminder.find({ chatId: req.chatId })
+      .sort({ reminderAt: 1 })
+      .lean();
     res.json({
       success: true,
       backup: {
@@ -106,21 +116,31 @@ router.post(
       }
 
       // Whitelist fields so a malicious/mangled backup can't set arbitrary keys.
+      // Note chatId is deliberately NOT in ALLOWED — we stamp the caller's own
+      // chatId below, so a backup file can never plant data under another user.
       const doc = {};
       for (const key of ALLOWED) {
         if (raw[key] !== undefined) doc[key] = raw[key];
       }
+      doc.chatId = req.chatId;
 
       try {
         let saved;
         // Upsert by _id when a valid one is supplied; otherwise create fresh.
+        // The filter includes chatId so a user can only ever update THEIR OWN
+        // document — supplying someone else's _id simply inserts a new doc under
+        // the caller (matched: none) rather than clobbering the other user's.
         if (raw._id && mongoose.Types.ObjectId.isValid(raw._id)) {
-          saved = await Reminder.findByIdAndUpdate(raw._id, doc, {
-            new: true,
-            upsert: true,
-            setDefaultsOnInsert: true,
-            runValidators: true,
-          });
+          saved = await Reminder.findOneAndUpdate(
+            { _id: raw._id, chatId: req.chatId },
+            doc,
+            {
+              new: true,
+              upsert: true,
+              setDefaultsOnInsert: true,
+              runValidators: true,
+            }
+          );
         } else {
           saved = await Reminder.create(doc);
         }
@@ -154,7 +174,7 @@ router.post(
 router.get(
   '/:id',
   asyncHandler(async (req, res) => {
-    const reminder = await Reminder.findById(req.params.id);
+    const reminder = await Reminder.findOne({ _id: req.params.id, chatId: req.chatId });
     if (!reminder) {
       return res.status(404).json({ success: false, message: 'תזכורת לא נמצאה' });
     }
@@ -200,6 +220,7 @@ router.post(
     const reminder = await Reminder.create(
       isBirthday
         ? {
+            chatId: req.chatId,
             text,
             type: 'birthday',
             personName: personName.trim(),
@@ -209,6 +230,7 @@ router.post(
             recurrence: { frequency: 'yearly' },
           }
         : {
+            chatId: req.chatId,
             text,
             type: 'reminder',
             reminderAt: new Date(reminderAt),
@@ -229,7 +251,7 @@ router.post(
 router.patch(
   '/:id',
   asyncHandler(async (req, res) => {
-    const reminder = await Reminder.findById(req.params.id);
+    const reminder = await Reminder.findOne({ _id: req.params.id, chatId: req.chatId });
     if (!reminder) {
       return res.status(404).json({ success: false, message: 'תזכורת לא נמצאה' });
     }
@@ -283,7 +305,7 @@ router.patch(
 router.patch(
   '/:id/complete',
   asyncHandler(async (req, res) => {
-    const reminder = await Reminder.findById(req.params.id);
+    const reminder = await Reminder.findOne({ _id: req.params.id, chatId: req.chatId });
     if (!reminder) {
       return res.status(404).json({ success: false, message: 'תזכורת לא נמצאה' });
     }
@@ -316,7 +338,7 @@ router.patch(
       });
     }
 
-    const reminder = await Reminder.findById(req.params.id);
+    const reminder = await Reminder.findOne({ _id: req.params.id, chatId: req.chatId });
     if (!reminder) {
       return res.status(404).json({ success: false, message: 'תזכורת לא נמצאה' });
     }
@@ -339,7 +361,7 @@ router.patch(
 router.delete(
   '/:id',
   asyncHandler(async (req, res) => {
-    const reminder = await Reminder.findById(req.params.id);
+    const reminder = await Reminder.findOne({ _id: req.params.id, chatId: req.chatId });
     if (!reminder) {
       return res.status(404).json({ success: false, message: 'תזכורת לא נמצאה' });
     }

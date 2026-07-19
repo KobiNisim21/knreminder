@@ -22,6 +22,19 @@ const RecurrenceSchema = new mongoose.Schema(
 // ─── Main Reminder Schema ──────────────────────────────────────────────────────
 const ReminderSchema = new mongoose.Schema(
   {
+    // ── Ownership ────────────────────────────────────────────────────────────────
+    // The Telegram chat ID of the user who owns this reminder. Every read/write
+    // is scoped by this field so users only ever see their own data. Stored as a
+    // String so large 64-bit Telegram IDs are never truncated by JS numbers.
+    // Required — but see the pre-validate hook below, which fills a local-dev
+    // fallback from TELEGRAM_CHAT_ID so existing single-user setups keep working.
+    chatId: {
+      type: String,
+      required: [true, 'chatId חסר — לא ניתן לשייך תזכורת ללא משתמש'],
+      trim: true,
+      index: true,
+    },
+
     // ── Core fields ──────────────────────────────────────────────────────────────
     text: {
       type: String,
@@ -109,17 +122,31 @@ ReminderSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 // Compound index for scheduler query: active + not-yet-notified + due soon
 ReminderSchema.index({ status: 1, notified: 1, reminderAt: 1 });
 
-// Index for sorted dashboard listing
-ReminderSchema.index({ status: 1, reminderAt: 1 });
+// Per-user dashboard listing: scope by owner, then status, then sort by time.
+ReminderSchema.index({ chatId: 1, status: 1, reminderAt: 1 });
 
-// Index for the birthdays feed (type + upcoming date)
-ReminderSchema.index({ type: 1, reminderAt: 1 });
+// Per-user birthdays feed: scope by owner, then type + upcoming date.
+ReminderSchema.index({ chatId: 1, type: 1, reminderAt: 1 });
 
 // ─── Virtuals ─────────────────────────────────────────────────────────────────
 
 // isOverdue: true if active and past due but not yet notified
 ReminderSchema.virtual('isOverdue').get(function () {
   return this.status === 'active' && this.reminderAt < new Date();
+});
+
+// ─── Pre-validate Hook ────────────────────────────────────────────────────────
+
+// Local-dev fallback: if a document is created without a chatId (e.g. legacy
+// single-user code paths or scripts), fill it from TELEGRAM_CHAT_ID so the
+// required-field validation passes. In production every write comes through the
+// auth middleware, which always supplies a verified chatId, so this only ever
+// fires for local development against a single-user .env.
+ReminderSchema.pre('validate', function (next) {
+  if (!this.chatId && process.env.TELEGRAM_CHAT_ID) {
+    this.chatId = String(process.env.TELEGRAM_CHAT_ID);
+  }
+  next();
 });
 
 // ─── Pre-save Hook ────────────────────────────────────────────────────────────

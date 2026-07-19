@@ -7,9 +7,20 @@ import MoreView from './pages/MoreView';
 import Settings from './pages/Settings';
 import BirthdaySettings from './pages/BirthdaySettings';
 import BackupRestore from './pages/BackupRestore';
+import Login from './pages/Login';
 import InstallPrompt from './components/InstallPrompt';
+import { useAuth } from './context/AuthContext';
 
 function App() {
+  const { isAuthenticated } = useAuth();
+
+  // Auth gate: until the user has a stored, verified chatId, the only thing that
+  // mounts is the Login screen. This keeps every data-fetching screen behind
+  // authentication so no request ever fires without an identity.
+  if (!isAuthenticated) {
+    return <Login />;
+  }
+
   return (
     <BrowserRouter>
       <Routes>

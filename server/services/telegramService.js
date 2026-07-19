@@ -84,9 +84,12 @@ async function verifyBotToken() {
  *   done_<reminderId>               →  mark complete
  */
 async function sendReminderNotification(reminder) {
-  const chatId = process.env.TELEGRAM_CHAT_ID;
+  // Route to the OWNER of this reminder. Read chatId straight off the document
+  // so notifications go to the right user in a multi-user deployment. Fall back
+  // to the env var only for legacy/test reminders that carry no chatId.
+  const chatId = reminder.chatId || process.env.TELEGRAM_CHAT_ID;
   if (!chatId || !process.env.TELEGRAM_BOT_TOKEN) {
-    console.warn('[Telegram] BOT_TOKEN or CHAT_ID not configured — skipping notification.');
+    console.warn('[Telegram] BOT_TOKEN or reminder chatId not configured — skipping notification.');
     return null;
   }
 
@@ -137,9 +140,12 @@ async function handleTelegramUpdate(update) {
 
   // ── Inline keyboard button tap ─────────────────────────────────────────────
   if (update.callback_query) {
-    const { id: callbackQueryId, data, message } = update.callback_query;
+    const { id: callbackQueryId, data, message, from } = update.callback_query;
     const chatId    = message?.chat?.id;
     const messageId = message?.message_id;
+    // The Telegram user who actually tapped the button. Used to verify the
+    // tapper owns the target reminder before mutating it (cross-user guard).
+    const fromId    = from?.id;
 
     if (!data) {
       await answerCallbackQuery(callbackQueryId, '');
@@ -156,6 +162,7 @@ async function handleTelegramUpdate(update) {
       await handleSnooze({
         callbackQueryId,
         chatId,
+        fromId,
         messageId,
         minutes:    parseInt(parts[1], 10),
         reminderId: parts.slice(2).join('_'),
@@ -165,6 +172,7 @@ async function handleTelegramUpdate(update) {
       await handleDone({
         callbackQueryId,
         chatId,
+        fromId,
         messageId,
         reminderId: parts.slice(1).join('_'),
       });
@@ -193,7 +201,22 @@ async function handleTelegramUpdate(update) {
 
 // ─── Action handlers ──────────────────────────────────────────────────────────
 
-async function handleSnooze({ callbackQueryId, chatId, messageId, minutes, reminderId }) {
+/**
+ * Cross-user guard: confirm the tapping Telegram user owns the target reminder.
+ * Telegram delivers the callback to the owner's chat, so under normal use fromId
+ * always matches. This defends against a forged/relayed callback referencing
+ * another user's reminderId. Returns true when the action may proceed.
+ */
+function ownsReminder(reminder, fromId) {
+  if (!reminder) return false;
+  // Legacy reminders created before multi-user carry no chatId — allow those
+  // through so existing single-user deployments keep working.
+  if (!reminder.chatId) return true;
+  if (fromId === undefined || fromId === null) return false;
+  return String(reminder.chatId) === String(fromId);
+}
+
+async function handleSnooze({ callbackQueryId, chatId, fromId, messageId, minutes, reminderId }) {
   if (!minutes || isNaN(minutes) || minutes <= 0) {
     await answerCallbackQuery(callbackQueryId, '⚠️ ערך זמן לא תקין', true);
     return;
@@ -202,6 +225,12 @@ async function handleSnooze({ callbackQueryId, chatId, messageId, minutes, remin
   const reminder = await Reminder.findById(reminderId);
   if (!reminder || reminder.status === 'completed') {
     await answerCallbackQuery(callbackQueryId, '⚠️ תזכורת זו כבר לא פעילה', true);
+    return;
+  }
+
+  if (!ownsReminder(reminder, fromId)) {
+    console.warn(`[Telegram] ⛔ Cross-user snooze blocked: user ${fromId} on reminder owned by ${reminder.chatId}`);
+    await answerCallbackQuery(callbackQueryId, '⚠️ אין לך הרשאה לתזכורת זו', true);
     return;
   }
 
@@ -221,10 +250,15 @@ async function handleSnooze({ callbackQueryId, chatId, messageId, minutes, remin
   console.log(`[Telegram] 💤 Snoozed reminder "${reminder.text}" by ${minutes}min → ${newTime.toISOString()}`);
 }
 
-async function handleDone({ callbackQueryId, chatId, messageId, reminderId }) {
+async function handleDone({ callbackQueryId, chatId, fromId, messageId, reminderId }) {
   const reminder = await Reminder.findById(reminderId);
   if (!reminder) {
     await answerCallbackQuery(callbackQueryId, '⚠️ תזכורת לא נמצאה', true);
+    return;
+  }
+  if (!ownsReminder(reminder, fromId)) {
+    console.warn(`[Telegram] ⛔ Cross-user complete blocked: user ${fromId} on reminder owned by ${reminder.chatId}`);
+    await answerCallbackQuery(callbackQueryId, '⚠️ אין לך הרשאה לתזכורת זו', true);
     return;
   }
   if (reminder.status === 'completed') {

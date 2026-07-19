@@ -8,6 +8,7 @@ const morgan = require('morgan');
 
 const remindersRouter = require('./routes/reminders');
 const telegramRouter  = require('./routes/telegram');
+const authRouter      = require('./routes/auth');
 const errorHandler    = require('./middleware/errorHandler');
 const { startAgenda, stopAgenda } = require('./services/agendaService');
 const { startPolling, stopPolling, deleteWebhook } = require('./services/telegramService');
@@ -40,7 +41,7 @@ app.use(
       }
     },
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-user-chat-id'],
     credentials: true,
   })
 );
@@ -54,6 +55,9 @@ app.use(express.json({ limit: '5mb' }));
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
+// Auth is mounted WITHOUT the resolveUser guard — login is how you obtain an
+// identity in the first place, so it must be reachable unauthenticated.
+app.use('/api/auth', authRouter);
 app.use('/api/reminders', remindersRouter);
 app.use('/api/telegram', telegramRouter);
 
