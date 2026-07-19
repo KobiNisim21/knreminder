@@ -21,6 +21,7 @@ const express = require('express');
 const crypto = require('crypto');
 const router = express.Router();
 const asyncHandler = require('../middleware/asyncHandler');
+const { issueToken } = require('../services/sessionToken');
 
 // Reject login payloads older than this — limits replay of a captured payload.
 const MAX_AUTH_AGE_SECONDS = 24 * 60 * 60; // 24h
@@ -85,16 +86,15 @@ router.post(
       payload.id;
 
     if (isDevLogin) {
-      return res.json({
-        success: true,
-        dev: true,
-        user: {
-          chatId: String(payload.id),
-          firstName: payload.first_name || 'מפתח',
-          username: payload.username || null,
-          photoUrl: payload.photo_url || null,
-        },
-      });
+      const user = {
+        chatId: String(payload.id),
+        firstName: payload.first_name || 'מפתח',
+        username: payload.username || null,
+        photoUrl: payload.photo_url || null,
+      };
+      // Even the dev path gets a real signed token so the middleware treats
+      // dev and prod sessions identically.
+      return res.json({ success: true, dev: true, token: issueToken(user), user });
     }
 
     if (!botToken) {
@@ -113,16 +113,17 @@ router.post(
       });
     }
 
-    return res.json({
-      success: true,
-      user: {
-        chatId: String(payload.id),
-        firstName: payload.first_name || null,
-        lastName: payload.last_name || null,
-        username: payload.username || null,
-        photoUrl: payload.photo_url || null,
-      },
-    });
+    const user = {
+      chatId: String(payload.id),
+      firstName: payload.first_name || null,
+      lastName: payload.last_name || null,
+      username: payload.username || null,
+      photoUrl: payload.photo_url || null,
+    };
+
+    // Mint a signed session token. This — not the raw chatId — is what the
+    // client sends on subsequent requests, so identity can't be forged.
+    return res.json({ success: true, token: issueToken(user), user });
   })
 );
 

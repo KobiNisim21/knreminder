@@ -34,8 +34,8 @@ export default function Login() {
       setError('');
       try {
         const res = await authApi.loginWithTelegram(tgUser);
-        if (res?.success && res.user?.chatId) {
-          login(res.user);
+        if (res?.success && res.token && res.user?.chatId) {
+          login({ token: res.token, user: res.user });
         } else {
           setError('אימות נכשל — נסה שוב');
         }
@@ -71,8 +71,8 @@ export default function Login() {
     setError('');
     try {
       const res = await authApi.loginWithTelegram({ id, dev: true });
-      if (res?.success && res.user?.chatId) {
-        login(res.user);
+      if (res?.success && res.token && res.user?.chatId) {
+        login({ token: res.token, user: res.user });
       } else {
         setError('התחברות נכשלה');
       }

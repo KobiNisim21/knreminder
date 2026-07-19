@@ -5,50 +5,75 @@
  * route downstream scopes its database queries by this value, so a user can only
  * ever touch their own documents.
  *
+ * SECURITY MODEL — signed session tokens
+ *   Identity is proven by a signed session token, NOT a raw chat ID. At login,
+ *   /api/auth/telegram HMAC-verifies the Telegram payload and mints a token that
+ *   embeds the chatId and is signed with a server-only secret (see
+ *   services/sessionToken.js). On every request we recompute the signature and
+ *   reject anything we didn't sign. Because the chatId lives *inside* the signed
+ *   token, a caller cannot forge it — flipping the chatId invalidates the
+ *   signature. This closes the header-spoofing gap of the earlier design.
+ *
  * Resolution order:
- *   1. `x-user-chat-id` header  (attached by the client's axios interceptor)
- *   2. `Authorization` header    ("Bearer <chatId>" or a bare chatId)
- *   3. TELEGRAM_CHAT_ID env var  — LOCAL DEV FALLBACK ONLY (see below)
+ *   1. `Authorization: Bearer <token>`  — signed session token (authoritative)
+ *   2. `x-user-chat-id` header          — DEV ONLY: raw chatId, non-production
+ *   3. TELEGRAM_CHAT_ID env var          — DEV ONLY: single-user local fallback
  *
- * Security model:
- *   The client only ever attaches a chatId that the server itself minted via the
- *   HMAC-verified /api/auth/telegram endpoint (Telegram Login Widget). A caller
- *   *could* forge the header with someone else's numeric ID — Telegram chat IDs
- *   are not secret — so the header alone is NOT proof of ownership. That is an
- *   accepted limitation of a lightweight, session-less design; the verification
- *   gate lives at login time. If stronger guarantees are ever needed, swap the
- *   raw chatId for a signed session token and verify the signature here.
- *
- *   The TELEGRAM_CHAT_ID env fallback is deliberately restricted to
- *   non-production so a misconfigured prod deploy can never silently collapse
- *   back into a global single-user bucket.
+ *   Paths 2 and 3 are hard-disabled in production, so a prod request must carry
+ *   a valid signed token or it is rejected with 401.
  */
+
+const { verifyToken } = require('../services/sessionToken');
 
 const isProduction = () => process.env.NODE_ENV === 'production';
 
 /**
- * Extract a chatId from the request headers, or null if none present.
- * Kept pure/synchronous so it's trivial to unit-test.
+ * Pull a bearer token out of the Authorization header, if present.
+ * Returns the token string or null. Kept pure for easy unit testing.
  */
-function chatIdFromHeaders(req) {
+function bearerFromHeaders(req) {
+  const auth = req.get('authorization');
+  if (!auth || !auth.trim()) return null;
+  const m = auth.match(/^Bearer\s+(.+)$/i);
+  if (m && m[1].trim()) return m[1].trim();
+  return null;
+}
+
+/**
+ * DEV-ONLY: extract a raw chatId from headers. In production this always returns
+ * null so a forged x-user-chat-id can never establish identity.
+ */
+function devChatIdFromHeaders(req) {
+  if (isProduction()) return null;
   const direct = req.get('x-user-chat-id');
   if (direct && String(direct).trim()) return String(direct).trim();
-
-  const auth = req.get('authorization');
-  if (auth && auth.trim()) {
-    // Accept "Bearer <chatId>" or a bare "<chatId>".
-    const value = auth.replace(/^Bearer\s+/i, '').trim();
-    if (value) return value;
-  }
-
   return null;
 }
 
 function resolveUser(req, res, next) {
-  let chatId = chatIdFromHeaders(req);
+  // 1) Signed session token — the authoritative, tamper-proof path.
+  const token = bearerFromHeaders(req);
+  if (token) {
+    const result = verifyToken(token);
+    if (result.ok) {
+      req.chatId = String(result.payload.sub);
+      req.session = result.payload; // downstream can read name/username/exp
+      return next();
+    }
+    // A token was supplied but failed verification: do NOT silently fall back to
+    // weaker paths — that would defeat the point. Reject explicitly.
+    return res.status(401).json({
+      success: false,
+      message: 'תוקף ההתחברות פג — נא להתחבר מחדש',
+      code: 'BAD_TOKEN',
+      reason: result.reason,
+    });
+  }
 
-  // Local-dev convenience: fall back to the single-user env var, but never in
-  // production — a prod request with no identity must be rejected.
+  // 2) DEV-ONLY: raw chatId header (never in production).
+  let chatId = devChatIdFromHeaders(req);
+
+  // 3) DEV-ONLY: single-user env fallback (never in production).
   if (!chatId && !isProduction() && process.env.TELEGRAM_CHAT_ID) {
     chatId = String(process.env.TELEGRAM_CHAT_ID).trim();
   }
@@ -66,4 +91,5 @@ function resolveUser(req, res, next) {
 }
 
 module.exports = resolveUser;
-module.exports.chatIdFromHeaders = chatIdFromHeaders;
+module.exports.bearerFromHeaders = bearerFromHeaders;
+module.exports.devChatIdFromHeaders = devChatIdFromHeaders;

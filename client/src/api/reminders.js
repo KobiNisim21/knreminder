@@ -12,33 +12,48 @@ const api = axios.create({
   timeout: 10000,
 });
 
-// ─── Auth: attach the signed-in user's chatId to every request ────────────────
-// AuthContext calls setAuthChatId() on login/logout/refresh. We keep the value
-// in a module-level variable (seeded from LocalStorage so the very first request
-// after a page load is already authenticated, before React mounts) and stamp it
-// onto each outgoing request as `x-user-chat-id`. The server's resolveUser
-// middleware reads this header to scope all data to the user.
-let currentChatId = null;
+// ─── Auth: attach the signed session token to every request ───────────────────
+// AuthContext calls setAuthToken() on login/logout/refresh. We keep the token in
+// a module-level variable (seeded from LocalStorage so the very first request
+// after a page load is already authenticated, before React mounts) and send it
+// as `Authorization: Bearer <token>`. The server's resolveUser middleware
+// verifies the signature — the chatId lives inside the signed token, so it can't
+// be forged.
+let currentToken = null;
 try {
   const raw = localStorage.getItem('knr.auth.v1');
-  if (raw) currentChatId = JSON.parse(raw)?.chatId ?? null;
+  if (raw) currentToken = JSON.parse(raw)?.token ?? null;
 } catch {
   /* ignore malformed/absent storage */
 }
 
-/** Set (or clear, with null) the chatId attached to all subsequent requests. */
-export function setAuthChatId(chatId) {
-  currentChatId = chatId ? String(chatId) : null;
+/** Set (or clear, with null) the session token attached to all requests. */
+export function setAuthToken(token) {
+  currentToken = token || null;
 }
 
 api.interceptors.request.use(
   (config) => {
-    if (currentChatId) {
-      config.headers['x-user-chat-id'] = currentChatId;
+    if (currentToken) {
+      config.headers['Authorization'] = `Bearer ${currentToken}`;
     }
     return config;
   },
   (error) => Promise.reject(error)
+);
+
+// When the server rejects our token (expired / invalid), surface a signal the
+// AuthContext can listen for to force a re-login instead of leaving the user
+// staring at silent failures.
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const code = error?.response?.data?.code;
+    if (error?.response?.status === 401 && (code === 'BAD_TOKEN' || code === 'NO_CHAT_ID')) {
+      window.dispatchEvent(new CustomEvent('knr:auth-expired'));
+    }
+    return Promise.reject(error);
+  }
 );
 
 // ─── Response interceptor (normalize errors) ─────────────────────────────────
