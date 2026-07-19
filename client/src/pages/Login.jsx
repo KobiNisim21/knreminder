@@ -31,6 +31,9 @@ export default function Login() {
   const { login } = useAuth();
   const [error, setError] = useState('');
   const [devChatId, setDevChatId] = useState('');
+  // The generated t.me deep link, kept so the visible fallback can be a real
+  // anchor tap (a genuine link is never popup-blocked on mobile).
+  const [deepLink, setDeepLink] = useState('');
 
   // 'idle' → nothing started; 'waiting' → deep link opened, polling for the tap.
   const [phase, setPhase] = useState('idle');
@@ -88,24 +91,46 @@ export default function Login() {
   // Clean up any in-flight poll if the component unmounts.
   useEffect(() => stopPolling, [stopPolling]);
 
+  // Build a human-readable, fully transparent diagnostic from a thrown API error.
+  // The interceptor attaches `.status` (HTTP code, or null for a network/CORS
+  // failure with no response) and `.serverMessage` (the backend's own message).
+  function describeError(err) {
+    if (err?.status) {
+      return `שגיאה ${err.status}: ${err.serverMessage || err.message || 'שגיאת שרת'}`;
+    }
+    // No HTTP response reached us at all — network down, DNS, CORS, or the
+    // server never answered. Surface whatever the browser reported.
+    return `אין תגובה מהשרת (${err?.message || 'network error'})`;
+  }
+
   const handleConnect = useCallback(async () => {
     setError('');
+    let res;
     try {
-      const res = await authApi.startDeepLink();
-      if (!res?.success || !res.sessionId || !res.deepLink) {
-        setError('לא ניתן להתחיל התחברות כעת. נסה שוב.');
-        return;
-      }
-      // Open the bot in Telegram. On mobile this hands off to the native app; on
-      // desktop it opens Telegram Web/Desktop. A new tab keeps our poller alive.
-      window.open(res.deepLink, '_blank', 'noopener');
-      pollDeadline.current = Date.now() + POLL_TIMEOUT_MS;
-      setPhase('waiting');
-      stopPolling();
-      pollStatus(res.sessionId);
+      res = await authApi.startDeepLink();
     } catch (err) {
-      setError(err.message || 'לא ניתן להתחיל התחברות כעת. נסה שוב.');
+      // Show the EXACT status/message the backend or network returned.
+      setError(describeError(err));
+      return;
     }
+    if (!res?.success || !res.sessionId || !res.deepLink) {
+      setError(`תגובה לא צפויה מהשרת: ${JSON.stringify(res)}`);
+      return;
+    }
+
+    // Remember the link so the visible "open again" fallback can be a real
+    // anchor tap (never popup-blocked), and start polling BEFORE navigating.
+    setDeepLink(res.deepLink);
+    pollDeadline.current = Date.now() + POLL_TIMEOUT_MS;
+    setPhase('waiting');
+    stopPolling();
+    pollStatus(res.sessionId);
+
+    // Navigate the current tab to the t.me link. Unlike window.open(), assigning
+    // location.href is a top-level navigation and is NEVER blocked by mobile
+    // popup blockers. On iOS/Android the t.me universal link hands off to the
+    // native Telegram app and the browser stays on this page, so polling lives on.
+    window.location.href = res.deepLink;
   }, [pollStatus, stopPolling]);
 
   // ── Dev fallback submit (localhost only) ────────────────────────────────────
@@ -161,14 +186,17 @@ export default function Login() {
 
             {phase === 'waiting' && (
               <div className="mt-4 text-[14px] text-textSecondary leading-relaxed" role="status">
-                <p>נפתחה טלגרם בחלון חדש. לחץ <b>Start</b> אצל הבוט,</p>
+                <p>נפתחת טלגרם. לחץ <b>Start</b> אצל הבוט,</p>
                 <p>ואז חזור לכאן — נתחבר אוטומטית.</p>
-                <button
-                  onClick={handleConnect}
-                  className="mt-3 text-[14px] text-accent underline underline-offset-2"
+                {/* Real anchor tap — a genuine link is never popup-blocked on
+                    mobile, unlike window.open(). Reuses the already-generated
+                    session link so it keeps polling the same session. */}
+                <a
+                  href={deepLink || undefined}
+                  className="inline-block mt-3 text-[14px] text-accent underline underline-offset-2"
                 >
                   לא נפתח? פתח שוב
-                </button>
+                </a>
               </div>
             )}
           </div>

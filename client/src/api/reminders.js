@@ -60,11 +60,15 @@ api.interceptors.response.use(
 api.interceptors.response.use(
   (response) => response.data,
   (error) => {
-    const message =
-      error.response?.data?.message ||
-      error.message ||
-      'שגיאת רשת — נסה שנית';
-    return Promise.reject(new Error(message));
+    const serverMessage = error.response?.data?.message;
+    const message = serverMessage || error.message || 'שגיאת רשת — נסה שנית';
+    // Preserve the HTTP status and raw server message on the thrown Error so
+    // callers can surface exact diagnostics (e.g. distinguish 503 vs 404 vs a
+    // network failure) instead of a generic string.
+    const err = new Error(message);
+    err.status = error.response?.status ?? null; // null → no response (network/CORS)
+    err.serverMessage = serverMessage ?? null;
+    return Promise.reject(err);
   }
 );
 
