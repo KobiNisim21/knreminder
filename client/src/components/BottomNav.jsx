@@ -6,8 +6,10 @@ import { useNavigate, useLocation } from 'react-router-dom';
  * Layout (RTL):
  *   [ תזכורות 🔔 ] [ ימי הולדת 🎂 ] [ + FAB ] [ לוח שנה 📅 ] [ יותר ☰ ]
  *
- * The red FAB (floating action button) sits in the center and is
- * absolutely positioned above the nav bar. Clicking it calls onAddPress.
+ * The red action button is docked into the center column and protrudes over
+ * the top edge of the bar (iOS-style), with a red-tinted ambient glow. Clicking
+ * it calls onAddPress (context-specific per screen). It fades/scales out while a
+ * modal is open so it never bleeds through the bottom-sheet overlay.
  */
 export default function BottomNav({ onAddPress, anyModalOpen = false }) {
   const navigate = useNavigate();
@@ -61,51 +63,61 @@ export default function BottomNav({ onAddPress, anyModalOpen = false }) {
   ];
 
   return (
-    <>
-      {/* ── Floating Action Button ─────────────────────────────────────────── */}
-      {/* Hidden (opacity + pointer-events) when any modal is open so it doesn't */}
-      {/* bleed through the bottom-sheet overlay. CSS transition keeps it smooth. */}
-      <button
-        className={`fab transition-opacity duration-200
-                    ${anyModalOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
-        onClick={onAddPress}
-        aria-label="הוסף תזכורת חדשה"
-        id="fab-add-reminder"
-        aria-hidden={anyModalOpen}
-      >
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
-          <line x1="12" y1="5" x2="12" y2="19"/>
-          <line x1="5" y1="12" x2="19" y2="12"/>
-        </svg>
-      </button>
-
-      {/* ── Bottom tab bar ─────────────────────────────────────────────── */}
-      <nav className="bottom-nav" role="navigation" aria-label="ניווט ראשי">
-        {tabs.map((tab, index) => {
-          // Center slot — empty spacer for FAB
-          if (tab === null) {
-            return <div key="fab-slot" className="flex-1" aria-hidden="true" />;
-          }
-
-          const isActive = tab.path === '/'
-            ? pathname === '/'
-            : tab.path && pathname.startsWith(tab.path);
-
+    // The nav is position:fixed, which itself establishes a containing block for
+    // absolutely-positioned children — so the docked button below anchors to it
+    // without needing an extra `relative` wrapper (which would break the bottom
+    // docking). It hosts a balanced 5-column grid; the middle column is the
+    // anchor slot over which the round + button protrudes.
+    <nav className="bottom-nav" role="navigation" aria-label="ניווט ראשי">
+      {tabs.map((tab) => {
+        // ── Center column: anchor for the docked protruding action button ──────
+        if (tab === null) {
           return (
-            <button
-              key={tab.id}
-              id={`nav-tab-${tab.id}`}
-              className={`bottom-nav-tab ${isActive ? 'active' : ''}`}
-              onClick={() => tab.path && navigate(tab.path)}
-              aria-label={tab.label}
-              aria-current={isActive ? 'page' : undefined}
-            >
-              {tab.icon}
-              <span>{tab.label}</span>
-            </button>
+            <div key="fab-anchor" className="flex-1 flex justify-center" aria-hidden={false}>
+              <button
+                onClick={onAddPress}
+                aria-label="הוסף תזכורת חדשה"
+                id="fab-add-reminder"
+                aria-hidden={anyModalOpen}
+                className={`absolute -top-6 left-1/2 -translate-x-1/2 z-50
+                            w-16 h-16 rounded-full
+                            bg-accent text-white
+                            flex items-center justify-center
+                            border-4 border-surface
+                            shadow-[0_8px_20px_-4px_rgba(244,67,54,0.55)]
+                            transition-all duration-150 ease-out
+                            active:scale-95
+                            ${anyModalOpen
+                              ? 'opacity-0 pointer-events-none scale-90'
+                              : 'opacity-100 scale-100'}`}
+              >
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
+                  <line x1="12" y1="5" x2="12" y2="19"/>
+                  <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+              </button>
+            </div>
           );
-        })}
-      </nav>
-    </>
+        }
+
+        const isActive = tab.path === '/'
+          ? pathname === '/'
+          : tab.path && pathname.startsWith(tab.path);
+
+        return (
+          <button
+            key={tab.id}
+            id={`nav-tab-${tab.id}`}
+            className={`bottom-nav-tab ${isActive ? 'active' : ''}`}
+            onClick={() => tab.path && navigate(tab.path)}
+            aria-label={tab.label}
+            aria-current={isActive ? 'page' : undefined}
+          >
+            {tab.icon}
+            <span>{tab.label}</span>
+          </button>
+        );
+      })}
+    </nav>
   );
 }

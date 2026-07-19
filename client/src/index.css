@@ -86,21 +86,8 @@
     @apply text-xs text-textSecondary mt-0.5;
   }
 
-  /* FAB — red floating action button */
-  .fab {
-    @apply fixed z-50
-           w-14 h-14 rounded-full
-           bg-accent text-white
-           flex items-center justify-center
-           text-2xl font-thin
-           shadow-fab
-           transition-transform duration-150
-           active:scale-95;
-    bottom: calc(1.5rem + env(safe-area-inset-bottom) + 3.5rem); /* above bottom nav */
-    /* Position in center of screen */
-    left: 50%;
-    transform: translateX(-50%);
-  }
+  /* NOTE: the old `.fab` class was removed — the action button is now docked
+     inside BottomNav (see components/BottomNav.jsx) using inline Tailwind. */
 
   /* Bottom navigation bar */
   .bottom-nav {
