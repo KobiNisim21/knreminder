@@ -129,6 +129,20 @@ export const authApi = {
    * @returns {Promise<{ success, user, dev? }>}
    */
   loginWithTelegram: (telegramUser) => api.post('/auth/telegram', telegramUser),
+
+  /**
+   * Start a deep-link login session. Returns a one-time sessionId and the
+   * t.me deep link the user opens in their Telegram app.
+   * @returns {Promise<{ success, sessionId, deepLink, botUsername }>}
+   */
+  startDeepLink: () => api.post('/auth/deeplink/start'),
+
+  /**
+   * Poll a deep-link session's status.
+   * @param {string} sessionId
+   * @returns {Promise<{ success, status: 'pending'|'authenticated'|'expired', token?, user? }>}
+   */
+  getDeepLinkStatus: (sessionId) => api.get(`/auth/deeplink/status/${sessionId}`),
 };
 
 export default api;

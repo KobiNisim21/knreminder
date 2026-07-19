@@ -12,6 +12,7 @@
 const axios = require('axios');
 const Reminder = require('../models/Reminder');
 const { scheduleReminder, cancelReminderJob } = require('./agendaService');
+const { claimSession: claimLoginSession } = require('./loginSessionStore');
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -182,11 +183,38 @@ async function handleTelegramUpdate(update) {
     }
   }
 
-  // ── /start or /chatid command ──────────────────────────────────────────────
+  // ── /start [param], /chatid command ────────────────────────────────────────
   if (update.message) {
-    const { text, chat } = update.message;
+    const { text, chat, from } = update.message;
     const chatId = chat?.id;
     if (!chatId) return;
+    if (typeof text !== 'string') return;
+
+    // Deep-link login: "/start auth_<sessionId>". The user reached us by opening
+    // the t.me deep link from the web login screen and tapping Start. Telegram
+    // vouches for `from.id`, so binding it to the pending session is trustworthy.
+    const startMatch = text.match(/^\/start\s+auth_([A-Za-z0-9]+)$/);
+    if (startMatch) {
+      const sessionId = startMatch[1];
+      const result = claimLoginSession(sessionId, {
+        id: from?.id ?? chatId,
+        first_name: from?.first_name,
+        last_name: from?.last_name,
+        username: from?.username,
+      });
+      if (result.ok) {
+        await sendMessage(
+          chatId,
+          `✅ *התחברת בהצלחה!*\n\nאפשר לחזור עכשיו לאפליקציה בדפדפן — היא תתחבר אוטומטית.`
+        );
+      } else {
+        await sendMessage(
+          chatId,
+          `⚠️ קישור ההתחברות פג תוקף או אינו תקין.\nחזור לאפליקציה ונסה להתחבר שוב.`
+        );
+      }
+      return;
+    }
 
     if (text === '/start' || text === '/chatid') {
       await sendMessage(

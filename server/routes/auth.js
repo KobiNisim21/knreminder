@@ -22,6 +22,10 @@ const crypto = require('crypto');
 const router = express.Router();
 const asyncHandler = require('../middleware/asyncHandler');
 const { issueToken } = require('../services/sessionToken');
+const loginSessions = require('../services/loginSessionStore');
+
+// Bot username for building the deep link. No @, no VITE_ prefix (server-side).
+const BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME || '';
 
 // Reject login payloads older than this — limits replay of a captured payload.
 const MAX_AUTH_AGE_SECONDS = 24 * 60 * 60; // 24h
@@ -124,6 +128,44 @@ router.post(
     // Mint a signed session token. This — not the raw chatId — is what the
     // client sends on subsequent requests, so identity can't be forged.
     return res.json({ success: true, token: issueToken(user), user });
+  })
+);
+
+// ─── Deep-link login (Telegram app "Start" flow) ──────────────────────────────
+// This bypasses the oauth.telegram.org login widget entirely. Instead the user
+// opens the bot in their native Telegram app via a t.me deep link carrying a
+// one-time session id; tapping "Start" delivers "/start auth_<id>" to our
+// webhook, which claims the session (see telegramService.handleTelegramUpdate).
+// The browser polls status until the session is authenticated.
+
+// POST /api/auth/deeplink/start → { success, sessionId, deepLink, botUsername }
+router.post(
+  '/deeplink/start',
+  asyncHandler(async (req, res) => {
+    if (!BOT_USERNAME) {
+      return res.status(503).json({
+        success: false,
+        message: 'TELEGRAM_BOT_USERNAME לא מוגדר בשרת',
+      });
+    }
+    const sessionId = loginSessions.createSession();
+    // Telegram's start parameter allows [A-Za-z0-9_-] and is capped at 64 chars.
+    // "auth_" (5) + 32 hex chars = 37 — safely within the limit.
+    const deepLink = `https://t.me/${BOT_USERNAME}?start=auth_${sessionId}`;
+    return res.json({ success: true, sessionId, deepLink, botUsername: BOT_USERNAME });
+  })
+);
+
+// GET /api/auth/deeplink/status/:sessionId
+//   → { success:true, status:'pending' }
+//   → { success:true, status:'authenticated', token, user }
+//   → { success:true, status:'expired' }
+router.get(
+  '/deeplink/status/:sessionId',
+  asyncHandler(async (req, res) => {
+    const { sessionId } = req.params;
+    const result = loginSessions.consumeIfReady(sessionId);
+    return res.json({ success: true, ...result });
   })
 );
 

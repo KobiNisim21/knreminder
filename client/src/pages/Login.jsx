@@ -1,132 +1,118 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { authApi } from '../api/reminders';
-
-// The six fields Telegram signs. Both the JS-callback flow and the redirect flow
-// deliver exactly these; the server verifies the hash over them identically.
-const TG_FIELDS = ['id', 'first_name', 'last_name', 'username', 'photo_url', 'auth_date', 'hash'];
 
 /**
  * Login — iOS-style authentication gate.
  *
- * Primary path: the official Telegram Login Widget in REDIRECT mode
- * (`data-auth-url`). On success Telegram navigates back to this page with the
- * signed fields as query params, which we POST to /api/auth/telegram for
- * server-side HMAC verification. Only the verified identity is stored. Redirect
- * mode is used instead of the JS `data-onauth` callback because it survives
- * React re-renders/remounts (the result is a fresh page load, not an in-page
- * postMessage) and works when the browser blocks the widget iframe's cross-site
- * cookies (Safari ITP, incognito) — the case that stalled the callback flow.
+ * Primary path: Telegram DEEP-LINK login. We ask the server for a one-time
+ * session id, send the user to https://t.me/<bot>?start=auth_<id>, and poll the
+ * session's status. When the user taps "Start" in their native Telegram app the
+ * bot webhook claims the session and mints a signed token, which our next poll
+ * receives. This completely bypasses the oauth.telegram.org login widget — no
+ * iframe, no cross-site cookies, no dependence on Telegram delivering a
+ * confirmation message to a browser popup.
  *
- * Dev fallback: when VITE_TELEGRAM_BOT_USERNAME is not configured (pure local
- * dev), we can't render the widget, so we show a plain chatId entry field. This
- * input is gated strictly to hostname === 'localhost' so it can never surface on
- * the live site, even if the bot username env var is missing in production. The
- * server also only honors this path when NODE_ENV !== 'production'.
+ * Dev fallback: on localhost only, a manual chatId entry field (the server also
+ * rejects that path when NODE_ENV === 'production').
  */
 
 const BOT_USERNAME = import.meta.env.VITE_TELEGRAM_BOT_USERNAME || '';
 
-// Hard environment gate for the manual Chat ID fallback. This input exists only
-// so a developer can sign in on their machine without the Telegram widget; it
-// must NEVER render on the live site. We key it strictly off the hostname, so
-// even a misconfigured production build (missing VITE_TELEGRAM_BOT_USERNAME)
-// can't expose it. The server independently rejects dev logins when
-// NODE_ENV === 'production', so this is defense-in-depth, not the only guard.
+// Hard environment gate for the manual Chat ID fallback — localhost only, so it
+// can never surface on the live site even if the bot username env var is unset.
 const IS_LOCALHOST = window.location.hostname === 'localhost';
+
+// How often to poll the login-session status, and for how long before giving up.
+const POLL_INTERVAL_MS = 2000;
+const POLL_TIMEOUT_MS = 5 * 60 * 1000; // matches the server-side session TTL
 
 export default function Login() {
   const { login } = useAuth();
-  const widgetRef = useRef(null);
   const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
   const [devChatId, setDevChatId] = useState('');
 
-  // Keep the latest `login` in a ref so the widget-injection effect can call it
-  // WITHOUT listing it as a dependency. This is the key to being re-render-proof:
-  // the effect below runs exactly once (empty deps), so a re-render can never
-  // tear down and re-inject the Telegram iframe mid-handshake.
+  // 'idle' → nothing started; 'waiting' → deep link opened, polling for the tap.
+  const [phase, setPhase] = useState('idle');
+
+  // Keep the latest `login` in a ref so the polling loop can call it without
+  // being a dependency (the loop is set up once and must not be torn down by a
+  // re-render mid-poll).
   const loginRef = useRef(login);
   loginRef.current = login;
 
-  // Shared handler for a verified Telegram payload (used by both flows).
-  const finishLogin = async (tgUser) => {
-    setBusy(true);
+  // Handles to the active poll so we can always clean them up.
+  const pollTimer = useRef(null);
+  const pollDeadline = useRef(0);
+
+  const stopPolling = useCallback(() => {
+    if (pollTimer.current) {
+      clearTimeout(pollTimer.current);
+      pollTimer.current = null;
+    }
+  }, []);
+
+  // Poll one session id until it authenticates, expires, or we time out.
+  const pollStatus = useCallback(
+    (sessionId) => {
+      const tick = async () => {
+        if (Date.now() > pollDeadline.current) {
+          stopPolling();
+          setPhase('idle');
+          setError('קישור ההתחברות פג תוקף. נסה שוב.');
+          return;
+        }
+        try {
+          const res = await authApi.getDeepLinkStatus(sessionId);
+          if (res?.status === 'authenticated' && res.token && res.user?.chatId) {
+            stopPolling();
+            loginRef.current({ token: res.token, user: res.user });
+            return;
+          }
+          if (res?.status === 'expired') {
+            stopPolling();
+            setPhase('idle');
+            setError('קישור ההתחברות פג תוקף. נסה שוב.');
+            return;
+          }
+        } catch {
+          // Transient network error — keep polling until the deadline.
+        }
+        pollTimer.current = setTimeout(tick, POLL_INTERVAL_MS);
+      };
+      tick();
+    },
+    [stopPolling]
+  );
+
+  // Clean up any in-flight poll if the component unmounts.
+  useEffect(() => stopPolling, [stopPolling]);
+
+  const handleConnect = useCallback(async () => {
     setError('');
     try {
-      const res = await authApi.loginWithTelegram(tgUser);
-      if (res?.success && res.token && res.user?.chatId) {
-        loginRef.current({ token: res.token, user: res.user });
-      } else {
-        setError('אימות נכשל — נסה שוב');
+      const res = await authApi.startDeepLink();
+      if (!res?.success || !res.sessionId || !res.deepLink) {
+        setError('לא ניתן להתחיל התחברות כעת. נסה שוב.');
+        return;
       }
+      // Open the bot in Telegram. On mobile this hands off to the native app; on
+      // desktop it opens Telegram Web/Desktop. A new tab keeps our poller alive.
+      window.open(res.deepLink, '_blank', 'noopener');
+      pollDeadline.current = Date.now() + POLL_TIMEOUT_MS;
+      setPhase('waiting');
+      stopPolling();
+      pollStatus(res.sessionId);
     } catch (err) {
-      setError(err.message || 'אימות נכשל');
-    } finally {
-      setBusy(false);
+      setError(err.message || 'לא ניתן להתחיל התחברות כעת. נסה שוב.');
     }
-  };
-  const finishLoginRef = useRef(finishLogin);
-  finishLoginRef.current = finishLogin;
+  }, [pollStatus, stopPolling]);
 
-  // ── Handle the redirect-flow return ─────────────────────────────────────────
-  // The redirect fallback sends the user to oauth.telegram.org and back to this
-  // page with the signed fields as query params (?id=…&hash=…). Detect that on
-  // mount, verify server-side, then strip the params from the URL. This path is
-  // a first-party full-page navigation, so it is NOT subject to the third-party-
-  // cookie blocking that stalls the iframe widget in Safari / incognito.
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (!params.get('id') || !params.get('hash')) return;
-
-    const tgUser = {};
-    for (const f of TG_FIELDS) {
-      const v = params.get(f);
-      if (v !== null) tgUser[f] = f === 'id' || f === 'auth_date' ? Number(v) : v;
-    }
-    // Clean the URL so a refresh doesn't replay a stale (and time-limited) payload.
-    window.history.replaceState({}, document.title, window.location.pathname);
-    finishLoginRef.current(tgUser);
-  }, []);
-
-  // ── Telegram widget wiring ──────────────────────────────────────────────────
-  // Empty deps → runs once per mount. In production there is no StrictMode
-  // double-invoke; locally the injection guard below prevents a duplicate script.
-  //
-  // We use Telegram's REDIRECT flow (`data-auth-url`) rather than the JS callback
-  // (`data-onauth`). On success Telegram does a top-level navigation back to this
-  // page with the signed fields as query params — there is no in-page postMessage
-  // handshake that a React re-render / remount could orphan. That makes the flow
-  // inherently re-render-proof and also avoids the callback getting lost when the
-  // browser restricts the widget iframe (Safari ITP, incognito third-party-cookie
-  // blocking). The return is handled by the mount effect above.
-  useEffect(() => {
-    const container = widgetRef.current;
-    if (!BOT_USERNAME || !container) return;
-
-    // Inject the widget script exactly once. The guard makes re-invocation
-    // (e.g. React 18 StrictMode's dev double-mount) a no-op instead of a
-    // second iframe that would fight the first for the OAuth handshake.
-    if (!container.querySelector('script[data-telegram-login]')) {
-      const returnUrl = `${window.location.origin}${window.location.pathname}`;
-      const script = document.createElement('script');
-      script.src = 'https://telegram.org/js/telegram-widget.js?22';
-      script.async = true;
-      script.setAttribute('data-telegram-login', BOT_USERNAME);
-      script.setAttribute('data-size', 'large');
-      script.setAttribute('data-radius', '12');
-      script.setAttribute('data-auth-url', returnUrl);
-      script.setAttribute('data-request-access', 'write');
-      container.appendChild(script);
-    }
-  }, []);
-
-  // ── Dev fallback submit ───────────────────────────────────────────────────────
+  // ── Dev fallback submit (localhost only) ────────────────────────────────────
   async function handleDevLogin(e) {
     e.preventDefault();
     const id = devChatId.trim();
     if (!id) return;
-    setBusy(true);
     setError('');
     try {
       const res = await authApi.loginWithTelegram({ id, dev: true });
@@ -137,8 +123,6 @@ export default function Login() {
       }
     } catch (err) {
       setError(err.message || 'התחברות נכשלה');
-    } finally {
-      setBusy(false);
     }
   }
 
@@ -160,25 +144,37 @@ export default function Login() {
           הנתונים שלך פרטיים ומשויכים לחשבון הטלגרם שלך בלבד.
         </p>
 
-        {/* Primary: Telegram Login Widget — the only auth path in production.
-            The container renders unconditionally (never gated by state) so its
-            ref stays stable and the injected iframe is never remounted. */}
+        {/* Primary: deep-link login via the native Telegram app. */}
         {BOT_USERNAME && (
-          <>
-            <div
-              className={`flex justify-center min-h-[48px] transition-opacity ${busy ? 'opacity-0 pointer-events-none h-0 overflow-hidden' : 'opacity-100'}`}
-              ref={widgetRef}
-            />
-            {busy && (
-              <p className="text-[15px] text-textSecondary" role="status">
-                מתחבר…
-              </p>
+          <div>
+            <button
+              onClick={handleConnect}
+              className="w-full rounded-xl bg-[#229ED9] text-white font-semibold py-3.5
+                         text-[16px] flex items-center justify-center gap-2
+                         active:opacity-80 transition-opacity"
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71l-4.14-3.05-1.99 1.93c-.23.23-.42.42-.83.42z"/>
+              </svg>
+              {phase === 'waiting' ? 'ממתין לאישור בטלגרם…' : 'התחבר דרך אפליקציית טלגרם'}
+            </button>
+
+            {phase === 'waiting' && (
+              <div className="mt-4 text-[14px] text-textSecondary leading-relaxed" role="status">
+                <p>נפתחה טלגרם בחלון חדש. לחץ <b>Start</b> אצל הבוט,</p>
+                <p>ואז חזור לכאן — נתחבר אוטומטית.</p>
+                <button
+                  onClick={handleConnect}
+                  className="mt-3 text-[14px] text-accent underline underline-offset-2"
+                >
+                  לא נפתח? פתח שוב
+                </button>
+              </div>
             )}
-          </>
+          </div>
         )}
 
-        {/* Dev fallback: manual chatId entry. Rendered ONLY on localhost so it
-            can never appear on the live site, regardless of env config. */}
+        {/* Dev fallback: manual chatId entry. localhost only. */}
         {IS_LOCALHOST && !BOT_USERNAME && (
           <form onSubmit={handleDevLogin} className="text-right">
             <label className="block text-[13px] text-textSecondary mb-1.5 px-1">
@@ -196,11 +192,11 @@ export default function Login() {
             />
             <button
               type="submit"
-              disabled={busy || !devChatId.trim()}
+              disabled={!devChatId.trim()}
               className="w-full rounded-xl bg-accent text-white font-semibold py-3
                          text-[16px] active:opacity-80 disabled:opacity-40"
             >
-              {busy ? 'מתחבר…' : 'התחבר'}
+              התחבר
             </button>
             <p className="text-xs text-textDisabled mt-3 leading-relaxed">
               שלח <code>/start</code> לבוט בטלגרם כדי לקבל את ה-Chat ID שלך.
@@ -208,8 +204,7 @@ export default function Login() {
           </form>
         )}
 
-        {/* Safety net: production build with no widget configured. Rather than
-            leak the dev input, tell the user auth isn't available. */}
+        {/* Safety net: production build with no bot configured. */}
         {!BOT_USERNAME && !IS_LOCALHOST && (
           <p className="text-[15px] text-textSecondary" role="alert">
             ההתחברות אינה זמינה כרגע. נסה שוב מאוחר יותר.
