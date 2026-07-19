@@ -2,13 +2,21 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { authApi } from '../api/reminders';
 
+// The six fields Telegram signs. Both the JS-callback flow and the redirect flow
+// deliver exactly these; the server verifies the hash over them identically.
+const TG_FIELDS = ['id', 'first_name', 'last_name', 'username', 'photo_url', 'auth_date', 'hash'];
+
 /**
  * Login — iOS-style authentication gate.
  *
- * Primary path: the official Telegram Login Widget. Telegram injects a button;
- * when the user authorizes, it invokes our global callback with a signed payload
- * that we POST to /api/auth/telegram for server-side HMAC verification. Only the
- * verified identity is stored.
+ * Primary path: the official Telegram Login Widget in REDIRECT mode
+ * (`data-auth-url`). On success Telegram navigates back to this page with the
+ * signed fields as query params, which we POST to /api/auth/telegram for
+ * server-side HMAC verification. Only the verified identity is stored. Redirect
+ * mode is used instead of the JS `data-onauth` callback because it survives
+ * React re-renders/remounts (the result is a fresh page load, not an in-page
+ * postMessage) and works when the browser blocks the widget iframe's cross-site
+ * cookies (Safari ITP, incognito) — the case that stalled the callback flow.
  *
  * Dev fallback: when VITE_TELEGRAM_BOT_USERNAME is not configured (pure local
  * dev), we can't render the widget, so we show a plain chatId entry field. This
@@ -34,43 +42,84 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
   const [devChatId, setDevChatId] = useState('');
 
-  // ── Telegram widget wiring ──────────────────────────────────────────────────
-  useEffect(() => {
-    if (!BOT_USERNAME || !widgetRef.current) return;
+  // Keep the latest `login` in a ref so the widget-injection effect can call it
+  // WITHOUT listing it as a dependency. This is the key to being re-render-proof:
+  // the effect below runs exactly once (empty deps), so a re-render can never
+  // tear down and re-inject the Telegram iframe mid-handshake.
+  const loginRef = useRef(login);
+  loginRef.current = login;
 
-    // Global callback the Telegram widget invokes on successful authorization.
-    window.onTelegramAuth = async (tgUser) => {
-      setBusy(true);
-      setError('');
-      try {
-        const res = await authApi.loginWithTelegram(tgUser);
-        if (res?.success && res.token && res.user?.chatId) {
-          login({ token: res.token, user: res.user });
-        } else {
-          setError('אימות נכשל — נסה שוב');
-        }
-      } catch (err) {
-        setError(err.message || 'אימות נכשל');
-      } finally {
-        setBusy(false);
+  // Shared handler for a verified Telegram payload (used by both flows).
+  const finishLogin = async (tgUser) => {
+    setBusy(true);
+    setError('');
+    try {
+      const res = await authApi.loginWithTelegram(tgUser);
+      if (res?.success && res.token && res.user?.chatId) {
+        loginRef.current({ token: res.token, user: res.user });
+      } else {
+        setError('אימות נכשל — נסה שוב');
       }
-    };
+    } catch (err) {
+      setError(err.message || 'אימות נכשל');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const finishLoginRef = useRef(finishLogin);
+  finishLoginRef.current = finishLogin;
 
-    // Inject the Telegram widget script (idempotent — guard against re-adds).
-    const script = document.createElement('script');
-    script.src = 'https://telegram.org/js/telegram-widget.js?22';
-    script.async = true;
-    script.setAttribute('data-telegram-login', BOT_USERNAME);
-    script.setAttribute('data-size', 'large');
-    script.setAttribute('data-radius', '12');
-    script.setAttribute('data-onauth', 'onTelegramAuth(user)');
-    script.setAttribute('data-request-access', 'write');
-    widgetRef.current.appendChild(script);
+  // ── Handle the redirect-flow return ─────────────────────────────────────────
+  // The redirect fallback sends the user to oauth.telegram.org and back to this
+  // page with the signed fields as query params (?id=…&hash=…). Detect that on
+  // mount, verify server-side, then strip the params from the URL. This path is
+  // a first-party full-page navigation, so it is NOT subject to the third-party-
+  // cookie blocking that stalls the iframe widget in Safari / incognito.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.get('id') || !params.get('hash')) return;
 
-    return () => {
-      delete window.onTelegramAuth;
-    };
-  }, [login]);
+    const tgUser = {};
+    for (const f of TG_FIELDS) {
+      const v = params.get(f);
+      if (v !== null) tgUser[f] = f === 'id' || f === 'auth_date' ? Number(v) : v;
+    }
+    // Clean the URL so a refresh doesn't replay a stale (and time-limited) payload.
+    window.history.replaceState({}, document.title, window.location.pathname);
+    finishLoginRef.current(tgUser);
+  }, []);
+
+  // ── Telegram widget wiring ──────────────────────────────────────────────────
+  // Empty deps → runs once per mount. In production there is no StrictMode
+  // double-invoke; locally the injection guard below prevents a duplicate script.
+  //
+  // We use Telegram's REDIRECT flow (`data-auth-url`) rather than the JS callback
+  // (`data-onauth`). On success Telegram does a top-level navigation back to this
+  // page with the signed fields as query params — there is no in-page postMessage
+  // handshake that a React re-render / remount could orphan. That makes the flow
+  // inherently re-render-proof and also avoids the callback getting lost when the
+  // browser restricts the widget iframe (Safari ITP, incognito third-party-cookie
+  // blocking). The return is handled by the mount effect above.
+  useEffect(() => {
+    const container = widgetRef.current;
+    if (!BOT_USERNAME || !container) return;
+
+    // Inject the widget script exactly once. The guard makes re-invocation
+    // (e.g. React 18 StrictMode's dev double-mount) a no-op instead of a
+    // second iframe that would fight the first for the OAuth handshake.
+    if (!container.querySelector('script[data-telegram-login]')) {
+      const returnUrl = `${window.location.origin}${window.location.pathname}`;
+      const script = document.createElement('script');
+      script.src = 'https://telegram.org/js/telegram-widget.js?22';
+      script.async = true;
+      script.setAttribute('data-telegram-login', BOT_USERNAME);
+      script.setAttribute('data-size', 'large');
+      script.setAttribute('data-radius', '12');
+      script.setAttribute('data-auth-url', returnUrl);
+      script.setAttribute('data-request-access', 'write');
+      container.appendChild(script);
+    }
+  }, []);
 
   // ── Dev fallback submit ───────────────────────────────────────────────────────
   async function handleDevLogin(e) {
@@ -111,9 +160,21 @@ export default function Login() {
           הנתונים שלך פרטיים ומשויכים לחשבון הטלגרם שלך בלבד.
         </p>
 
-        {/* Primary: Telegram Login Widget — the only auth path in production. */}
+        {/* Primary: Telegram Login Widget — the only auth path in production.
+            The container renders unconditionally (never gated by state) so its
+            ref stays stable and the injected iframe is never remounted. */}
         {BOT_USERNAME && (
-          <div className="flex justify-center min-h-[48px]" ref={widgetRef} />
+          <>
+            <div
+              className={`flex justify-center min-h-[48px] transition-opacity ${busy ? 'opacity-0 pointer-events-none h-0 overflow-hidden' : 'opacity-100'}`}
+              ref={widgetRef}
+            />
+            {busy && (
+              <p className="text-[15px] text-textSecondary" role="status">
+                מתחבר…
+              </p>
+            )}
+          </>
         )}
 
         {/* Dev fallback: manual chatId entry. Rendered ONLY on localhost so it
