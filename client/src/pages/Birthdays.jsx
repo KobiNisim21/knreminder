@@ -2,11 +2,20 @@ import { useState } from 'react';
 import { useBirthdays } from '../hooks/useReminders';
 import BottomNav from '../components/BottomNav';
 import AddBirthdayModal from '../components/AddBirthdayModal';
+import { useSettings, BIRTHDAY_COLORS } from '../context/SettingsContext';
 import {
   parseDisplayTime,
   formatBirthdayLabel,
   formatBirthdayDateHeader,
 } from '../utils/dateHelpers';
+
+/** Resolves the user's default birthday color key to a display hex. */
+function birthdayColorHex(key) {
+  const c = BIRTHDAY_COLORS.find((x) => x.key === key);
+  // White reads as invisible on a white row — fall back to the neutral gray.
+  if (!c || c.key === 'white') return '#8E8E93';
+  return c.hex;
+}
 
 /**
  * Birthdays — Upcoming birthday feed, grouped chronologically by date.
@@ -21,6 +30,7 @@ import {
  */
 export default function Birthdays() {
   const { data: birthdays, isLoading, isError, error, refetch, isFetching } = useBirthdays();
+  const { settings } = useSettings();
   const [modalOpen, setModalOpen] = useState(false);
 
   return (
@@ -79,7 +89,11 @@ export default function Birthdays() {
         )}
 
         {!isLoading && !isError && (
-          <BirthdayFeed birthdays={birthdays ?? []} onAdd={() => setModalOpen(true)} />
+          <BirthdayFeed
+            birthdays={birthdays ?? []}
+            onAdd={() => setModalOpen(true)}
+            accentColor={birthdayColorHex(settings.birthdays.color)}
+          />
         )}
       </main>
 
@@ -92,7 +106,7 @@ export default function Birthdays() {
 
 // ─── Feed ───────────────────────────────────────────────────────────────────────
 
-function BirthdayFeed({ birthdays, onAdd }) {
+function BirthdayFeed({ birthdays, onAdd, accentColor }) {
   if (birthdays.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-24 px-8 text-center gap-4 animate-fade-in">
@@ -123,7 +137,7 @@ function BirthdayFeed({ birthdays, onAdd }) {
           </div>
 
           {/* Birthday row */}
-          <BirthdayRow birthday={b} />
+          <BirthdayRow birthday={b} accentColor={accentColor} />
         </section>
       ))}
       <div className="h-4" />
@@ -133,15 +147,15 @@ function BirthdayFeed({ birthdays, onAdd }) {
 
 // ─── Row ────────────────────────────────────────────────────────────────────────
 
-function BirthdayRow({ birthday }) {
+function BirthdayRow({ birthday, accentColor }) {
   const { hours, minutes } = parseDisplayTime(birthday.reminderAt);
   const label = formatBirthdayLabel(birthday);
 
   return (
     <div className="reminder-row bg-surface">
-      {/* Time column — red like the reference */}
+      {/* Time column — tinted with the user's default birthday color */}
       <div className="min-w-[76px] text-right ml-3 flex-shrink-0">
-        <div className="time-display text-accent">
+        <div className="time-display" style={{ color: accentColor }}>
           {hours}:{minutes}
         </div>
       </div>
@@ -153,8 +167,8 @@ function BirthdayRow({ birthday }) {
         </p>
       </div>
 
-      {/* Cake icon (trailing) */}
-      <div className="flex-shrink-0 ml-1 text-textSecondary">
+      {/* Cake icon (trailing) — tinted with the default birthday color */}
+      <div className="flex-shrink-0 ml-1" style={{ color: accentColor }}>
         <CakeIcon size={22} />
       </div>
     </div>

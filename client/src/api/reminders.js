@@ -70,6 +70,15 @@ export const remindersApi = {
 
   /** Hard delete a reminder */
   delete: (id) => api.delete(`/reminders/${id}`),
+
+  /** Full data dump for backup — returns { success, backup: {...} } */
+  exportAll: () => api.get('/reminders/export'),
+
+  /**
+   * Bulk restore from a backup payload.
+   * @param {{ items: Array }} payload
+   */
+  import: (payload) => api.post('/reminders/import', payload),
 };
 
 export default api;

@@ -1,12 +1,12 @@
-import { groupRemindersByDay, formatDateLabel } from '../utils/dateHelpers';
+import { groupRemindersByDay } from '../utils/dateHelpers';
 import ReminderItem from './ReminderItem';
 
 /**
  * ReminderList — Groups reminders into sticky-header sections:
- *   ⚠️ עבר הזמן (Overdue)
+ *   [Full Hebrew date] (past-due days, red header — e.g. "יום שבת, 24 בדצמבר 2026")
  *   היום (Today)
  *   מחר (Tomorrow)
- *   [Full date] (Upcoming days)
+ *   [Date] (Upcoming days)
  *
  * Each section header has a blue "+" quick-add button.
  */
@@ -23,7 +23,7 @@ export default function ReminderList({ reminders, selectedId, onSelect, onQuickA
         <section key={group.key}>
           {/* ── Sticky section header ─────────────────────────────────────── */}
           <div className="section-header">
-            <span className={group.key === '__overdue__' ? 'text-accent' : 'text-primary'}>
+            <span className={group.isPast ? 'text-accent' : 'text-primary'}>
               {group.label}
             </span>
             <button

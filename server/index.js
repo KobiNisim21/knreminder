@@ -48,8 +48,9 @@ app.use(
 // Request logging (concise in production, dev-friendly locally)
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
-// JSON body parser (Telegram webhooks also send JSON)
-app.use(express.json());
+// JSON body parser (Telegram webhooks also send JSON).
+// 5mb ceiling accommodates full backup/restore payloads.
+app.use(express.json({ limit: '5mb' }));
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 

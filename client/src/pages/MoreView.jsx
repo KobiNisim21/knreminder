@@ -25,7 +25,7 @@ export default function MoreView() {
         {
           id: 'settings',
           label: 'הגדרות',
-          onClick: () => comingSoon('הגדרות'),
+          onClick: () => navigate('/settings'),
         },
         {
           id: 'completed',
@@ -35,7 +35,7 @@ export default function MoreView() {
         {
           id: 'backup',
           label: 'גיבוי ושחזור',
-          onClick: () => comingSoon('גיבוי ושחזור'),
+          onClick: () => navigate('/backup'),
         },
       ],
     },

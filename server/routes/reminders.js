@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const router = express.Router();
 
 const Reminder = require('../models/Reminder');
@@ -47,6 +48,105 @@ router.get(
     });
 
     res.json({ success: true, count: reminders.length, data: reminders });
+  })
+);
+
+// ─── GET /api/reminders/export ────────────────────────────────────────────────
+// Full data dump for backup: every reminder + birthday (all statuses).
+// The client serializes this into a downloadable `.knr` file.
+router.get(
+  '/export',
+  asyncHandler(async (req, res) => {
+    const items = await Reminder.find({}).sort({ reminderAt: 1 }).lean();
+    res.json({
+      success: true,
+      backup: {
+        format: 'knr-backup',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        count: items.length,
+        items,
+      },
+    });
+  })
+);
+
+// ─── POST /api/reminders/import ───────────────────────────────────────────────
+// Bulk restore from a backup payload. Upserts each item by _id (so re-importing
+// the same backup is idempotent) and reschedules active/snoozed jobs.
+//
+// Body: { items: [ …reminder docs… ] }  — as produced by GET /export.
+router.post(
+  '/import',
+  asyncHandler(async (req, res) => {
+    const items = req.body?.items ?? req.body?.backup?.items;
+
+    if (!Array.isArray(items)) {
+      return res.status(400).json({
+        success: false,
+        message: 'קובץ גיבוי לא תקין — לא נמצאו פריטים',
+      });
+    }
+
+    const ALLOWED = [
+      'text', 'type', 'personName', 'birthYear', 'reminderAt',
+      'isRecurring', 'recurrence', 'status', 'completedAt',
+      'snoozeCount', 'originalReminderAt', 'notified', 'expiresAt',
+    ];
+
+    let imported = 0;
+    let skipped = 0;
+    const errors = [];
+
+    for (const raw of items) {
+      // Minimal structural validation — every item must have text + reminderAt.
+      if (!raw || typeof raw.text !== 'string' || !raw.reminderAt) {
+        skipped += 1;
+        continue;
+      }
+
+      // Whitelist fields so a malicious/mangled backup can't set arbitrary keys.
+      const doc = {};
+      for (const key of ALLOWED) {
+        if (raw[key] !== undefined) doc[key] = raw[key];
+      }
+
+      try {
+        let saved;
+        // Upsert by _id when a valid one is supplied; otherwise create fresh.
+        if (raw._id && mongoose.Types.ObjectId.isValid(raw._id)) {
+          saved = await Reminder.findByIdAndUpdate(raw._id, doc, {
+            new: true,
+            upsert: true,
+            setDefaultsOnInsert: true,
+            runValidators: true,
+          });
+        } else {
+          saved = await Reminder.create(doc);
+        }
+
+        // Reschedule notifications for items that are still pending in the future.
+        if (
+          saved &&
+          ['active', 'snoozed'].includes(saved.status) &&
+          new Date(saved.reminderAt) > new Date()
+        ) {
+          await scheduleReminder(saved);
+        }
+        imported += 1;
+      } catch (err) {
+        skipped += 1;
+        errors.push({ text: raw.text, error: err.message });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `שוחזרו ${imported} פריטים`,
+      imported,
+      skipped,
+      ...(errors.length ? { errors } : {}),
+    });
   })
 );
 

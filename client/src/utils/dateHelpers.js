@@ -25,10 +25,13 @@ function startOfDay(date) {
  * @returns {Array<{ label: string, key: string, reminders: Array }>}
  *
  * Section labels:
- *   'היום'      — today
- *   'מחר'       — tomorrow
- *   'עבר הזמן'  — past (overdue active reminders)
- *   Date string — e.g. 'יום ג׳, 20 ביולי'
+ *   Full Hebrew date — past-due days, one group each (e.g. 'יום שבת, 24 בדצמבר 2026')
+ *   'היום'           — today
+ *   'מחר'            — tomorrow
+ *   Date string      — upcoming days, e.g. 'יום ג׳, 20 ביולי 2026'
+ *
+ * Each returned group carries an `isPast` flag so the UI can style past-due
+ * headers distinctly (red).
  */
 export function groupRemindersByDay(reminders) {
   const now = new Date();
@@ -46,10 +49,15 @@ export function groupRemindersByDay(reminders) {
     const dayStart = startOfDay(date);
     let key;
     let label;
+    let isPast = false;
 
     if (dayStart < todayStart) {
-      key = '__overdue__';
-      label = '⚠️ עבר הזמן';
+      // Past-due days each get their own group, headed by the full Hebrew
+      // date (e.g. "יום שבת, 24 בדצמבר 2026") rather than a generic
+      // "עבר הזמן" string. Keyed by ISO date so each past day is distinct.
+      key = `past__${dayStart.toISOString().slice(0, 10)}`;
+      label = formatFullDateLabel(date);
+      isPast = true;
     } else if (dayStart.getTime() === todayStart.getTime()) {
       key = '__today__';
       label = 'היום';
@@ -63,20 +71,22 @@ export function groupRemindersByDay(reminders) {
     }
 
     if (!groups[key]) {
-      groups[key] = { label, key, reminders: [] };
+      groups[key] = { label, key, reminders: [], isPast };
       groupOrder.push(key);
     }
     groups[key].reminders.push(reminder);
   }
 
-  // Return in insertion order (reminders are pre-sorted by reminderAt)
-  // but put overdue first
+  // Order: past days first (chronological — reminders are pre-sorted ascending,
+  // so groupOrder already holds past keys oldest→newest), then today, tomorrow,
+  // then upcoming days.
+  const pastKeys = groupOrder.filter((k) => k.startsWith('past__'));
   const ordered = [];
-  if (groups['__overdue__']) ordered.push(groups['__overdue__']);
+  for (const key of pastKeys) ordered.push(groups[key]);
   if (groups['__today__']) ordered.push(groups['__today__']);
   if (groups['__tomorrow__']) ordered.push(groups['__tomorrow__']);
   for (const key of groupOrder) {
-    if (!['__overdue__', '__today__', '__tomorrow__'].includes(key)) {
+    if (!key.startsWith('past__') && !['__today__', '__tomorrow__'].includes(key)) {
       ordered.push(groups[key]);
     }
   }
@@ -93,6 +103,20 @@ export function groupRemindersByDay(reminders) {
 export function formatDateLabel(date) {
   return new Intl.DateTimeFormat('he-IL', {
     weekday: 'short',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date(date));
+}
+
+/**
+ * Formats a date into a full Hebrew section header with the long weekday.
+ * Used for past-due reminder groups.
+ * Example: "יום שבת, 24 בדצמבר 2026"
+ */
+export function formatFullDateLabel(date) {
+  return new Intl.DateTimeFormat('he-IL', {
+    weekday: 'long',
     day: 'numeric',
     month: 'long',
     year: 'numeric',
