@@ -95,7 +95,7 @@ async function scheduleReminder(reminder) {
     console.log(`[Agenda] Cancelled ${cancelledCount} existing job(s) for reminder ${reminder._id}`);
   }
 
-  const [job] = await ag.schedule(reminder.reminderAt, 'send reminder', {
+  const job = await ag.schedule(reminder.reminderAt, 'send reminder', {
     reminderId: reminder._id.toString(),
   });
 
