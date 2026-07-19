@@ -70,21 +70,21 @@ export default function DateTimePicker({ value, onChange }) {
 
   return (
     <div className="flex items-center justify-center gap-2 py-2 select-none" dir="ltr">
-      {/* Selection highlight bar */}
       <div className="relative flex gap-2 w-full max-w-xs">
-        {/* Highlight overlay (center row) */}
+
+        {/* Selection highlight bar — sits between the top/bottom fade lines */}
         <div
-          className="absolute left-0 right-0 pointer-events-none z-10 rounded-lg bg-gray-100"
+          className="absolute left-0 right-0 pointer-events-none z-10 rounded-lg"
           style={{
             top: ITEM_HEIGHT,
             height: ITEM_HEIGHT,
+            backgroundColor: 'rgba(0,0,0,0.06)',
+            borderTop: '1px solid rgba(0,0,0,0.10)',
+            borderBottom: '1px solid rgba(0,0,0,0.10)',
           }}
         />
-        {/* Top / bottom fade gradients */}
-        <div className="absolute left-0 right-0 top-0 h-11 pointer-events-none z-20 bg-gradient-to-b from-white to-transparent" />
-        <div className="absolute left-0 right-0 bottom-0 h-11 pointer-events-none z-20 bg-gradient-to-t from-white to-transparent" />
 
-        {/* ── Time drum (left, since LTR inside) ─────────────────────── */}
+        {/* ── Time drum ─────────────────────────────────────────────────── */}
         <DrumColumn
           items={timeOptions.map((t) => t.label)}
           selectedIdx={timeIdx}
@@ -93,7 +93,7 @@ export default function DateTimePicker({ value, onChange }) {
           itemHeight={ITEM_HEIGHT}
         />
 
-        {/* ── Date drum (right) ─────────────────────────────────────── */}
+        {/* ── Date drum ─────────────────────────────────────────────────── */}
         <DrumColumn
           items={dateOptions.map((d) => d.label)}
           selectedIdx={dateIdx}
@@ -116,7 +116,7 @@ const DrumColumn = forwardRef(function DrumColumn(
   ref
 ) {
   const VISIBLE = 3;
-  const PADDING = Math.floor(VISIBLE / 2); // 1 item padding top and bottom
+  const PADDING = Math.floor(VISIBLE / 2);
 
   return (
     <div
@@ -127,6 +127,8 @@ const DrumColumn = forwardRef(function DrumColumn(
         height: VISIBLE * itemHeight,
         scrollSnapType: 'y mandatory',
         WebkitOverflowScrolling: 'touch',
+        // Prevent iOS from creating a new stacking context that clips text
+        WebkitTransform: 'translateZ(0)',
       }}
     >
       {/* Top padding */}
@@ -134,22 +136,31 @@ const DrumColumn = forwardRef(function DrumColumn(
         <div key={`top-${i}`} style={{ height: itemHeight }} />
       ))}
 
-      {items.map((label, idx) => (
-        <div
-          key={idx}
-          className={`flex items-center justify-center text-[15px] transition-all duration-150
-                      ${idx === selectedIdx
-                        ? 'text-textPrimary font-medium'
-                        : 'text-textSecondary text-opacity-60'}`}
-          style={{
-            height: itemHeight,
-            scrollSnapAlign: 'center',
-            fontSize: idx === selectedIdx ? '16px' : '14px',
-          }}
-        >
-          {label}
-        </div>
-      ))}
+      {items.map((label, idx) => {
+        const isSelected = idx === selectedIdx;
+        return (
+          <div
+            key={idx}
+            style={{
+              height: itemHeight,
+              scrollSnapAlign: 'center',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: isSelected ? '16px' : '14px',
+              fontWeight: isSelected ? '500' : '400',
+              // Use explicit rgba instead of Tailwind opacity classes —
+              // iOS Safari mishandles text-opacity with certain font variants.
+              // -webkit-text-fill-color overrides color on iOS; set it explicitly.
+              color: isSelected ? 'rgba(33,33,33,1)' : 'rgba(117,117,117,0.75)',
+              WebkitTextFillColor: isSelected ? 'rgba(33,33,33,1)' : 'rgba(117,117,117,0.75)',
+              transition: 'font-size 0.15s, color 0.15s',
+            }}
+          >
+            {label}
+          </div>
+        );
+      })}
 
       {/* Bottom padding */}
       {Array.from({ length: PADDING }).map((_, i) => (
@@ -158,6 +169,7 @@ const DrumColumn = forwardRef(function DrumColumn(
     </div>
   );
 });
+
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 

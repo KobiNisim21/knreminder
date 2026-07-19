@@ -131,8 +131,11 @@ export default function Dashboard() {
         onClose={() => setEditingReminder(null)}
       />
 
-      {/* ── Bottom navigation + FAB ───────────────────────────────────────────── */}
-      <BottomNav onAddPress={() => openModal()} />
+      {/* ── Bottom navigation + FAB ─────────────────────────────────────────── */}
+      <BottomNav
+        onAddPress={() => openModal()}
+        anyModalOpen={modalOpen || !!editingReminder}
+      />
     </div>
   );
 }

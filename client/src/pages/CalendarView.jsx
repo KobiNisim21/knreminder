@@ -215,7 +215,11 @@ export default function CalendarView() {
       />
 
       {/* ── Bottom navigation ────────────────────────────────────────────────── */}
-      <BottomNav onAddPress={() => openAddForDay(selectedDate ?? today)} />
+      <BottomNav
+        onAddPress={() => openAddForDay(selectedDate ?? today)}
+        anyModalOpen={addModalOpen || !!editingReminder}
+      />
+
     </div>
   );
 }

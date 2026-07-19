@@ -60,7 +60,9 @@ export default function AddReminderModal({ isOpen, onClose, initialDate }) {
   const createMutation = useMutation({
     mutationFn: (payload) => remindersApi.create(payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reminders'] });
+      // refetchQueries triggers an IMMEDIATE network fetch (not just "mark stale").
+      // This is what makes the new reminder appear instantly without re-opening the app.
+      queryClient.refetchQueries({ queryKey: ['reminders'], type: 'active' });
       onClose();
     },
     onError: (err) => setError(err.message),

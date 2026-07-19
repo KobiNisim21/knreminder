@@ -28,7 +28,8 @@ export default function Completed() {
       </main>
 
       <AddReminderModal isOpen={modalOpen} onClose={() => setModalOpen(false)} />
-      <BottomNav onAddPress={() => setModalOpen(true)} />
+      <BottomNav onAddPress={() => setModalOpen(true)} anyModalOpen={modalOpen} />
+
     </div>
   );
 }

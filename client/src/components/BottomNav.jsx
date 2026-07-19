@@ -9,7 +9,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
  * The red FAB (floating action button) sits in the center and is
  * absolutely positioned above the nav bar. Clicking it calls onAddPress.
  */
-export default function BottomNav({ onAddPress }) {
+export default function BottomNav({ onAddPress, anyModalOpen = false }) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
@@ -60,12 +60,16 @@ export default function BottomNav({ onAddPress }) {
 
   return (
     <>
-      {/* ── Floating Action Button (red "+") ────────────────────────────── */}
+      {/* ── Floating Action Button ─────────────────────────────────────────── */}
+      {/* Hidden (opacity + pointer-events) when any modal is open so it doesn't */}
+      {/* bleed through the bottom-sheet overlay. CSS transition keeps it smooth. */}
       <button
-        className="fab"
+        className={`fab transition-opacity duration-200
+                    ${anyModalOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
         onClick={onAddPress}
         aria-label="הוסף תזכורת חדשה"
         id="fab-add-reminder"
+        aria-hidden={anyModalOpen}
       >
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
           <line x1="12" y1="5" x2="12" y2="19"/>

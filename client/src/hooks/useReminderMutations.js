@@ -14,37 +14,42 @@ import { remindersApi } from '../api/reminders';
 export function useReminderMutations() {
   const queryClient = useQueryClient();
 
-  const invalidateAll = () => {
-    queryClient.invalidateQueries({ queryKey: ['reminders'] });
-    queryClient.invalidateQueries({ queryKey: ['reminders', 'completed'] });
-  };
+  // refetchQueries (not invalidateQueries) triggers an IMMEDIATE network request.
+  // invalidateQueries only marks the cache stale — it won't refetch until the next
+  // interval fires (60s) or the user focuses the window. This was causing the
+  // "I have to background the app to see changes" bug.
+  const refetchActive = () =>
+    queryClient.refetchQueries({ queryKey: ['reminders'], type: 'active' });
 
-  const invalidateActive = () =>
-    queryClient.invalidateQueries({ queryKey: ['reminders'] });
+  const refetchAll = () => {
+    queryClient.refetchQueries({ queryKey: ['reminders'], type: 'active' });
+    queryClient.refetchQueries({ queryKey: ['reminders', 'completed'], type: 'active' });
+  };
 
   // ── Complete ────────────────────────────────────────────────────────────────
   const completeMutation = useMutation({
     mutationFn: (id) => remindersApi.complete(id),
-    onSuccess: invalidateAll,
+    onSuccess: refetchAll,
   });
 
   // ── Delete ──────────────────────────────────────────────────────────────────
   const deleteMutation = useMutation({
     mutationFn: (id) => remindersApi.delete(id),
-    onSuccess: invalidateActive,
+    onSuccess: refetchActive,
   });
 
   // ── Update (text / time / recurrence) ──────────────────────────────────────
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => remindersApi.update(id, data),
-    onSuccess: invalidateActive,
+    onSuccess: refetchActive,
   });
 
   // ── Snooze ──────────────────────────────────────────────────────────────────
   const snoozeMutation = useMutation({
     mutationFn: ({ id, minutes }) => remindersApi.snooze(id, minutes),
-    onSuccess: invalidateActive,
+    onSuccess: refetchActive,
   });
+
 
   return {
     completeMutation,
