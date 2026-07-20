@@ -280,16 +280,6 @@ router.patch(
         });
       }
       timeChanged = reminder.reminderAt.getTime() !== newTime.getTime();
-      // Only enforce the "must be in the future" rule when the user actually
-      // moved the time to a NEW value. Editing just the text of an old reminder
-      // (leaving its original past date untouched) must be allowed — otherwise
-      // every edit of a past-due item would fail validation.
-      if (timeChanged && newTime <= new Date()) {
-        return res.status(400).json({
-          success: false,
-          message: 'מועד התזכורת חייב להיות בעתיד',
-        });
-      }
       reminder.reminderAt = newTime;
       reminder.notified = false;
     }
