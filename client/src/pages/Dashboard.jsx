@@ -7,7 +7,6 @@ import AddReminderModal from '../components/AddReminderModal';
 import EditReminderModal from '../components/EditReminderModal';
 import ActionBar from '../components/ActionBar';
 import BulkActionBar from '../components/BulkActionBar';
-import BulkActionBar from '../components/BulkActionBar';
 
 /**
  * Dashboard — Main page: active reminders timeline.
