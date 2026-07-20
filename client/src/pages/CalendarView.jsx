@@ -7,6 +7,7 @@ import BottomNav from '../components/BottomNav';
 import AddReminderModal from '../components/AddReminderModal';
 import EditReminderModal from '../components/EditReminderModal';
 import ActionBar from '../components/ActionBar';
+import BulkActionBar from '../components/BulkActionBar';
 
 // Full Hebrew day names (Sunday=0 … Saturday=6)
 const DAY_NAMES_FULL = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
@@ -40,12 +41,28 @@ export default function CalendarView() {
   const [addModalDate, setAddModalDate] = useState(null);
   const [editingReminder, setEditingReminder] = useState(null);
   const [selectedReminder, setSelectedReminder] = useState(null);
+  const [checkedIds, setCheckedIds] = useState([]);
 
   const { remindersByDate, isLoading, isError, error, refetch } = useCalendarData();
-  const { completeMutation, snoozeMutation, deleteMutation } = useReminderMutations();
+  const { completeMutation, snoozeMutation, deleteMutation, bulkMutation } = useReminderMutations();
 
   function toggleSelect(reminder) {
+    if (checkedIds.length > 0) {
+      toggleChecked(reminder._id);
+      return;
+    }
     setSelectedReminder((prev) => (prev?._id === reminder._id ? null : reminder));
+  }
+
+  function exitSelectMode() {
+    setCheckedIds([]);
+  }
+
+  function toggleChecked(id) {
+    setSelectedReminder(null); // suppress single-item action bar
+    setCheckedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
   }
 
   // Reminders for the currently selected day
@@ -178,6 +195,8 @@ export default function CalendarView() {
                   reminder={reminder}
                   isSelected={selectedReminder?._id === reminder._id}
                   onSelect={toggleSelect}
+                  isChecked={checkedIds.includes(reminder._id)}
+                  onToggleCheck={toggleChecked}
                 />
               ))}
           </div>
@@ -212,15 +231,33 @@ export default function CalendarView() {
         )}
       </main>
 
-      {/* ── Contextual action bar ────────────────────────────────────────────── */}
-      <ActionBar
-        reminder={selectedReminder}
-        onClose={() => setSelectedReminder(null)}
-        onEdit={(reminder) => setEditingReminder(reminder)}
-        onComplete={(id) => completeMutation.mutate(id)}
-        onSnooze={(id, payload) => snoozeMutation.mutate({ id, ...payload })}
-        onRemove={(id) => deleteMutation.mutate(id)}
-      />
+      {/* ── Contextual action bar (single-item; hidden when any item is checked) ──── */}
+      {checkedIds.length === 0 && (
+        <ActionBar
+          reminder={selectedReminder}
+          onClose={() => setSelectedReminder(null)}
+          onEdit={(reminder) => setEditingReminder(reminder)}
+          onComplete={(id) => completeMutation.mutate(id)}
+          onSnooze={(id, payload) => snoozeMutation.mutate({ id, ...payload })}
+          onRemove={(id) => deleteMutation.mutate(id)}
+        />
+      )}
+
+      {/* ── Bulk action bar (shown when items are checked) ──────────────────── */}
+      {checkedIds.length > 0 && (
+        <BulkActionBar
+          count={checkedIds.length}
+          busy={bulkMutation.isPending}
+          onSelectAll={() => setCheckedIds(selectedReminders.map((r) => r._id))}
+          onClear={exitSelectMode}
+          onBulk={(action, payload) => {
+            bulkMutation.mutate(
+              { ids: checkedIds, action, ...payload },
+              { onSuccess: exitSelectMode }
+            );
+          }}
+        />
+      )}
 
       {/* ── Modals ───────────────────────────────────────────────────────────── */}
       <AddReminderModal
@@ -236,7 +273,7 @@ export default function CalendarView() {
       {/* ── Bottom navigation ────────────────────────────────────────────────── */}
       <BottomNav
         onAddPress={() => openAddForDay(selectedDate ?? today)}
-        anyModalOpen={addModalOpen || !!editingReminder || !!selectedReminder}
+        anyModalOpen={addModalOpen || !!editingReminder || !!selectedReminder || checkedIds.length > 0}
       />
 
     </div>

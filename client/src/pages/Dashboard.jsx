@@ -26,8 +26,7 @@ export default function Dashboard() {
   const [selectedReminder, setSelectedReminder] = useState(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
-  // Bulk multi-select mode + the set of checked reminder ids.
-  const [selectMode, setSelectMode] = useState(false);
+  // The set of checked reminder ids for bulk selection.
   const [checkedIds, setCheckedIds] = useState([]);
 
   // Filter reminders by text. Case-insensitive, trims whitespace; an empty query
@@ -54,22 +53,20 @@ export default function Dashboard() {
 
   // Tap a row → toggle selection (parent shows the ActionBar).
   function toggleSelect(reminder) {
+    if (checkedIds.length > 0) {
+      toggleChecked(reminder._id);
+      return;
+    }
     setSelectedReminder((prev) => (prev?._id === reminder._id ? null : reminder));
   }
 
   // ── Bulk multi-select ───────────────────────────────────────────────────────
-  function enterSelectMode() {
-    setSelectedReminder(null); // close the single-item action bar
-    setCheckedIds([]);
-    setSelectMode(true);
-  }
-
   function exitSelectMode() {
-    setSelectMode(false);
     setCheckedIds([]);
   }
 
   function toggleChecked(id) {
+    setSelectedReminder(null); // suppress single-item action bar
     setCheckedIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
@@ -112,30 +109,11 @@ export default function Dashboard() {
                 <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>
             </button>
-
-            {/* Enter/exit bulk multi-select mode */}
-            <button
-              onClick={selectMode ? exitSelectMode : enterSelectMode}
-              className={`p-1 rounded-full hover:bg-gray-100 active:bg-gray-200 transition-colors
-                          ${selectMode ? 'text-primary' : 'text-textSecondary'}`}
-              aria-label={selectMode ? 'בטל בחירה מרובה' : 'בחירה מרובה'}
-              aria-pressed={selectMode}
-            >
-              {selectMode ? (
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                </svg>
-              ) : (
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-                </svg>
-              )}
-            </button>
           </div>
 
           {/* Title (right in RTL) */}
           <h1 className="text-lg font-semibold text-textPrimary">
-            {selectMode ? `נבחרו ${checkedIds.length}` : 'תזכורות'}
+            {checkedIds.length > 0 ? `נבחרו ${checkedIds.length}` : 'תזכורות'}
           </h1>
         </div>
 
@@ -215,7 +193,6 @@ export default function Dashboard() {
             reminders={visibleReminders}
             selectedId={selectedReminder?._id ?? null}
             onSelect={toggleSelect}
-            selectMode={selectMode}
             checkedIds={checkedIds}
             onToggleCheck={toggleChecked}
             onQuickAdd={(sectionKey) => {
@@ -230,8 +207,8 @@ export default function Dashboard() {
         )}
       </main>
 
-      {/* ── Contextual action bar (single-item; hidden during bulk select) ──── */}
-      {!selectMode && (
+      {/* ── Contextual action bar (single-item; hidden when any item is checked) ──── */}
+      {checkedIds.length === 0 && (
         <ActionBar
           reminder={selectedReminder}
           onClose={() => setSelectedReminder(null)}
@@ -242,8 +219,8 @@ export default function Dashboard() {
         />
       )}
 
-      {/* ── Bulk action bar (shown in select mode) ──────────────────────────── */}
-      {selectMode && (
+      {/* ── Bulk action bar (shown when items are checked) ──────────────────── */}
+      {checkedIds.length > 0 && (
         <BulkActionBar
           count={checkedIds.length}
           busy={bulkMutation.isPending}
@@ -272,7 +249,7 @@ export default function Dashboard() {
       {/* ── Bottom navigation + FAB ─────────────────────────────────────────── */}
       <BottomNav
         onAddPress={() => openModal()}
-        anyModalOpen={modalOpen || !!editingReminder || !!selectedReminder}
+        anyModalOpen={modalOpen || !!editingReminder || !!selectedReminder || checkedIds.length > 0}
       />
     </div>
   );

@@ -184,6 +184,7 @@ export default function EditReminderModal({ reminder, onClose }) {
             <DateTimePicker
               value={reminderAt}
               onChange={(d) => { setReminderAt(d); setTimeTouched(true); }}
+              allowPast
             />
           </div>
 

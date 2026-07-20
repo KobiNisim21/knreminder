@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 
 /**
  * DateTimePicker — iOS-style scroll-wheel date and time picker.
@@ -13,12 +13,17 @@ import { useState, useRef, useEffect } from 'react';
  * Props:
  *   value    {Date}         — current selected datetime
  *   onChange {fn(Date)}     — called with new Date when selection changes
+ *   allowPast {boolean}     — when true, the date drum also includes the past
+ *                             365 days (needed when editing an old reminder and
+ *                             keeping/choosing a past date). Default false, so
+ *                             snooze pickers stay future-only.
  */
-export default function DateTimePicker({ value, onChange }) {
+export default function DateTimePicker({ value, onChange, allowPast = false }) {
   const selectedDate = value ? new Date(value) : new Date();
 
-  // Build date options: today + 364 days
-  const dateOptions = buildDateOptions();
+  // Build date options. Future-only by default; also reaches into the past when
+  // allowPast is set (edit modal). Memoized so the array identity is stable.
+  const dateOptions = useMemo(() => buildDateOptions(allowPast), [allowPast]);
   // Build time options: 00:00 → 23:55 in 5-min steps
   const timeOptions = buildTimeOptions();
 
@@ -173,7 +178,12 @@ const DrumColumn = forwardRef(function DrumColumn(
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
-function buildDateOptions() {
+// When allowPast is set, the drum also spans this many days *before* today so an
+// old reminder's original date can be selected. The Hebrew label includes the
+// year for past dates (they can be from previous years) to avoid ambiguity.
+const PAST_DAYS = 365;
+
+function buildDateOptions(allowPast = false) {
   const options = [];
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -183,13 +193,22 @@ function buildDateOptions() {
     day: 'numeric',
     month: 'short',
   });
+  const hebrewDateWithYear = new Intl.DateTimeFormat('he-IL', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
 
-  for (let i = 0; i < 365; i++) {
+  const start = allowPast ? -PAST_DAYS : 0;
+  for (let i = start; i < 365; i++) {
     const date = new Date(today);
     date.setDate(today.getDate() + i);
     let label;
     if (i === 0) label = 'היום';
     else if (i === 1) label = 'מחר';
+    else if (i === -1) label = 'אתמול';
+    else if (i < 0) label = hebrewDateWithYear.format(date);
     else label = hebrewDate.format(date);
     options.push({ date, label });
   }

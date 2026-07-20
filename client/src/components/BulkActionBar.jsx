@@ -46,8 +46,6 @@ export default function BulkActionBar({ count, busy, onBulk, onSelectAll, onClea
 
   return (
     <>
-      <div className="fixed inset-0 z-40" onClick={onClear} aria-hidden="true" />
-
       <div
         className="fixed left-0 right-0 z-50 bg-surface border-t border-divider
                    shadow-2xl animate-slide-up"
