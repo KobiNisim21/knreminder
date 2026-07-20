@@ -17,10 +17,20 @@ const SWIPE_SNOOZE_MINUTES = 60;
  *
  * Props:
  *   reminder    {object}
- *   isSelected  {boolean}
- *   onSelect    {fn(reminder)}  — toggle selection
+ *   isSelected  {boolean}       — single-select highlight (contextual ActionBar)
+ *   onSelect    {fn(reminder)}  — toggle single selection
+ *   selectMode  {boolean}       — bulk multi-select mode: show checkbox, no swipe
+ *   isChecked   {boolean}       — checked state in bulk mode
+ *   onToggleCheck {fn(id)}      — toggle this row's checkbox in bulk mode
  */
-export default function ReminderItem({ reminder, isSelected, onSelect }) {
+export default function ReminderItem({
+  reminder,
+  isSelected,
+  onSelect,
+  selectMode = false,
+  isChecked = false,
+  onToggleCheck,
+}) {
   const { completeMutation, snoozeMutation } = useReminderMutations();
 
   const [swipeX, setSwipeX] = useState(0); // signed: +right / -left
@@ -33,7 +43,10 @@ export default function ReminderItem({ reminder, isSelected, onSelect }) {
   const MAX_SWIPE = 130;
 
   // ── Touch handlers ──────────────────────────────────────────────────────────
+  // Swipe gestures are disabled in bulk-select mode — a row tap toggles its
+  // checkbox instead, and mixing the two would make selection feel unpredictable.
   function handleTouchStart(e) {
+    if (selectMode) return;
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
     movedRef.current = false;
@@ -41,6 +54,7 @@ export default function ReminderItem({ reminder, isSelected, onSelect }) {
   }
 
   function handleTouchMove(e) {
+    if (selectMode) return;
     if (touchStartX.current === null) return;
 
     // Positive dx = finger moved right; negative = moved left.
@@ -60,6 +74,7 @@ export default function ReminderItem({ reminder, isSelected, onSelect }) {
   }
 
   function handleTouchEnd() {
+    if (selectMode) return;
     const dx = swipeX;
     touchStartX.current = null;
     setIsSwiping(false);
@@ -141,9 +156,32 @@ export default function ReminderItem({ reminder, isSelected, onSelect }) {
             movedRef.current = false;
             return;
           }
-          onSelect?.(reminder);
+          if (selectMode) {
+            onToggleCheck?.(reminder._id);
+          } else {
+            onSelect?.(reminder);
+          }
         }}
       >
+        {/* Bulk-select checkbox (only in select mode) */}
+        {selectMode && (
+          <div className="flex-shrink-0 ml-1 mr-1" aria-hidden="true">
+            <span
+              className={`flex items-center justify-center w-5 h-5 rounded-full border-2
+                          transition-colors
+                          ${isChecked
+                            ? 'bg-primary border-primary text-white'
+                            : 'border-textDisabled bg-transparent'}`}
+            >
+              {isChecked && (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              )}
+            </span>
+          </div>
+        )}
+
         {/* Time column */}
         <div className="min-w-[76px] text-right ml-3 flex-shrink-0">
           <div className={`time-display ${overdue ? 'text-accent' : 'text-textPrimary'}`}>
@@ -174,8 +212,8 @@ export default function ReminderItem({ reminder, isSelected, onSelect }) {
           )}
         </div>
 
-        {/* Selected check indicator */}
-        {isSelected && (
+        {/* Selected check indicator (single-select mode only) */}
+        {isSelected && !selectMode && (
           <div className="flex-shrink-0 ml-1 text-primary">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="20 6 9 17 4 12" />

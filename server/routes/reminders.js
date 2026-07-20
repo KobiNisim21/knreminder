@@ -273,13 +273,23 @@ router.patch(
     if (birthYear !== undefined) reminder.birthYear = birthYear;
     if (reminderAt !== undefined) {
       const newTime = new Date(reminderAt);
-      if (newTime <= new Date()) {
+      if (Number.isNaN(newTime.getTime())) {
+        return res.status(400).json({
+          success: false,
+          message: 'מועד התזכורת אינו תקין',
+        });
+      }
+      timeChanged = reminder.reminderAt.getTime() !== newTime.getTime();
+      // Only enforce the "must be in the future" rule when the user actually
+      // moved the time to a NEW value. Editing just the text of an old reminder
+      // (leaving its original past date untouched) must be allowed — otherwise
+      // every edit of a past-due item would fail validation.
+      if (timeChanged && newTime <= new Date()) {
         return res.status(400).json({
           success: false,
           message: 'מועד התזכורת חייב להיות בעתיד',
         });
       }
-      timeChanged = reminder.reminderAt.getTime() !== newTime.getTime();
       reminder.reminderAt = newTime;
       reminder.notified = false;
     }
@@ -326,16 +336,40 @@ router.patch(
 );
 
 // ─── PATCH /api/reminders/:id/snooze ─────────────────────────────────────────
-// Snooze a reminder by N minutes. Reschedules the Agenda job.
+// Snooze a reminder. Two mutually-exclusive modes:
+//   { minutes: N }        → snooze N minutes from now (quick presets)
+//   { until: <ISO date> } → snooze to a specific absolute datetime (custom date)
+// Reschedules the Agenda job.
 router.patch(
   '/:id/snooze',
   asyncHandler(async (req, res) => {
-    const { minutes } = req.body;
-    if (!minutes || typeof minutes !== 'number' || minutes <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'נא לספק מספר דקות חיובי לדחייה',
-      });
+    const { minutes, until } = req.body;
+
+    // Resolve the target time from whichever mode was supplied.
+    let newTime;
+    if (until !== undefined) {
+      const target = new Date(until);
+      if (isNaN(target.getTime())) {
+        return res.status(400).json({
+          success: false,
+          message: 'תאריך היעד לדחייה אינו תקין',
+        });
+      }
+      if (target <= new Date()) {
+        return res.status(400).json({
+          success: false,
+          message: 'מועד הדחייה חייב להיות בעתיד',
+        });
+      }
+      newTime = target;
+    } else {
+      if (!minutes || typeof minutes !== 'number' || minutes <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'נא לספק מספר דקות חיובי לדחייה',
+        });
+      }
+      newTime = new Date(Date.now() + minutes * 60 * 1000);
     }
 
     const reminder = await Reminder.findOne({ _id: req.params.id, chatId: req.chatId });
@@ -343,7 +377,6 @@ router.patch(
       return res.status(404).json({ success: false, message: 'תזכורת לא נמצאה' });
     }
 
-    const newTime = new Date(Date.now() + minutes * 60 * 1000);
     reminder.reminderAt = newTime;
     reminder.snoozeCount += 1;
     reminder.status = 'active';

@@ -45,16 +45,39 @@ export function useReminderMutations() {
   });
 
   // ── Snooze ──────────────────────────────────────────────────────────────────
+  // Accepts either { id, minutes } for a relative snooze or { id, until } with an
+  // absolute ISO datetime for a custom "snooze to a specific moment".
   const snoozeMutation = useMutation({
-    mutationFn: ({ id, minutes }) => remindersApi.snooze(id, minutes),
+    mutationFn: ({ id, minutes, until }) => remindersApi.snooze(id, { minutes, until }),
     onSuccess: refetchActive,
   });
 
+  // ── Bulk actions ──────────────────────────────────────────────────────────────
+  // Apply one action to many reminders at once. Each fires its own request in
+  // parallel (Promise.allSettled so one failure doesn't abort the rest), then we
+  // refetch a single time after the whole batch settles instead of per-item.
+  // The mutationFn resolves to { ok, failed } so the caller can report partial
+  // failures. `action` is 'complete' | 'delete' | 'snooze'.
+  const bulkMutation = useMutation({
+    mutationFn: async ({ ids, action, minutes, until }) => {
+      const call = (id) => {
+        if (action === 'complete') return remindersApi.complete(id);
+        if (action === 'delete') return remindersApi.delete(id);
+        if (action === 'snooze') return remindersApi.snooze(id, { minutes, until });
+        throw new Error(`unknown bulk action: ${action}`);
+      };
+      const results = await Promise.allSettled((ids ?? []).map(call));
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      return { ok: results.length - failed, failed };
+    },
+    onSuccess: refetchAll,
+  });
 
   return {
     completeMutation,
     deleteMutation,
     updateMutation,
     snoozeMutation,
+    bulkMutation,
   };
 }

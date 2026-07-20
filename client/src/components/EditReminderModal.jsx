@@ -46,6 +46,10 @@ export default function EditReminderModal({ reminder, onClose }) {
   const [recurrence, setRecurrence] = useState(null);
   const [error, setError] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // Tracks whether the user actually changed the date/time. When false we omit
+  // reminderAt from the PATCH so a text-only edit never touches the (possibly
+  // past) original date — the server then skips its future-date validation.
+  const [timeTouched, setTimeTouched] = useState(false);
 
   useEffect(() => {
     if (reminder) {
@@ -54,6 +58,7 @@ export default function EditReminderModal({ reminder, onClose }) {
       setRecurrence(reminder.recurrence?.frequency ?? null);
       setError('');
       setShowDeleteConfirm(false);
+      setTimeTouched(false);
       setTimeout(() => textRef.current?.focus(), 350);
     }
   }, [reminder]);
@@ -76,17 +81,25 @@ export default function EditReminderModal({ reminder, onClose }) {
       return;
     }
 
+    const data = {
+      text: text.trim(),
+      isRecurring: recurrence !== null,
+      recurrence: recurrence ? { frequency: recurrence } : null,
+    };
+    // Only send reminderAt if the user actually adjusted the picker. Omitting it
+    // preserves the original date (even if it's in the past) and lets the server
+    // skip future-date validation — so text-only edits always save.
+    if (timeTouched) {
+      data.reminderAt = reminderAt.toISOString();
+    }
+
     updateMutation.mutate(
+      { id: reminder._id, data },
       {
-        id: reminder._id,
-        data: {
-          text: text.trim(),
-          reminderAt: reminderAt.toISOString(),
-          isRecurring: recurrence !== null,
-          recurrence: recurrence ? { frequency: recurrence } : null,
-        },
-      },
-      { onSuccess: onClose }
+        onSuccess: onClose,
+        onError: (err) =>
+          setError(err?.message || 'שמירת השינויים נכשלה. נסה שוב.'),
+      }
     );
   }
 
@@ -168,7 +181,10 @@ export default function EditReminderModal({ reminder, onClose }) {
           {/* DateTimePicker */}
           <div className="px-3 py-2 border-b border-divider">
             <p className="text-xs text-textSecondary text-right px-2 mb-1">תאריך ושעה</p>
-            <DateTimePicker value={reminderAt} onChange={setReminderAt} />
+            <DateTimePicker
+              value={reminderAt}
+              onChange={(d) => { setReminderAt(d); setTimeTouched(true); }}
+            />
           </div>
 
           {/* Recurrence chips */}

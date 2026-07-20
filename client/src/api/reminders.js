@@ -104,11 +104,21 @@ export const remindersApi = {
   complete: (id) => api.patch(`/reminders/${id}/complete`),
 
   /**
-   * Snooze a reminder by N minutes
+   * Snooze a reminder — either by a relative number of minutes, or to an
+   * absolute datetime.
    * @param {string} id
-   * @param {number} minutes
+   * @param {number|{minutes?:number, until?:string}} arg - minutes (number) for
+   *   a relative snooze, or { until: ISOString } to snooze to a specific moment.
    */
-  snooze: (id, minutes) => api.patch(`/reminders/${id}/snooze`, { minutes }),
+  snooze: (id, arg) => {
+    const body =
+      typeof arg === 'number'
+        ? { minutes: arg }
+        : arg?.until
+          ? { until: arg.until }
+          : { minutes: arg?.minutes };
+    return api.patch(`/reminders/${id}/snooze`, body);
+  },
 
   /** Hard delete a reminder */
   delete: (id) => api.delete(`/reminders/${id}`),

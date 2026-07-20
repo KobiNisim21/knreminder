@@ -218,7 +218,7 @@ export default function CalendarView() {
         onClose={() => setSelectedReminder(null)}
         onEdit={(reminder) => setEditingReminder(reminder)}
         onComplete={(id) => completeMutation.mutate(id)}
-        onSnooze={(id, minutes) => snoozeMutation.mutate({ id, minutes })}
+        onSnooze={(id, payload) => snoozeMutation.mutate({ id, ...payload })}
         onRemove={(id) => deleteMutation.mutate(id)}
       />
 

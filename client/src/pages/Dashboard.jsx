@@ -6,6 +6,8 @@ import BottomNav from '../components/BottomNav';
 import AddReminderModal from '../components/AddReminderModal';
 import EditReminderModal from '../components/EditReminderModal';
 import ActionBar from '../components/ActionBar';
+import BulkActionBar from '../components/BulkActionBar';
+import BulkActionBar from '../components/BulkActionBar';
 
 /**
  * Dashboard — Main page: active reminders timeline.
@@ -18,11 +20,28 @@ import ActionBar from '../components/ActionBar';
  */
 export default function Dashboard() {
   const { data: reminders, isLoading, isError, error, refetch, isFetching } = useReminders();
-  const { completeMutation, snoozeMutation, deleteMutation } = useReminderMutations();
+  const { completeMutation, snoozeMutation, deleteMutation, bulkMutation } = useReminderMutations();
   const [modalOpen, setModalOpen] = useState(false);
   const [initialModalDate, setInitialModalDate] = useState(null);
   const [editingReminder, setEditingReminder] = useState(null);
   const [selectedReminder, setSelectedReminder] = useState(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  // Bulk multi-select mode + the set of checked reminder ids.
+  const [selectMode, setSelectMode] = useState(false);
+  const [checkedIds, setCheckedIds] = useState([]);
+
+  // Filter reminders by text. Case-insensitive, trims whitespace; an empty query
+  // shows everything. Runs client-side over the already-fetched list.
+  const q = query.trim().toLowerCase();
+  const visibleReminders = q
+    ? (reminders ?? []).filter((r) => (r.text ?? '').toLowerCase().includes(q))
+    : (reminders ?? []);
+
+  function closeSearch() {
+    setSearchOpen(false);
+    setQuery('');
+  }
 
   function openModal(date = null) {
     setInitialModalDate(date);
@@ -37,6 +56,24 @@ export default function Dashboard() {
   // Tap a row → toggle selection (parent shows the ActionBar).
   function toggleSelect(reminder) {
     setSelectedReminder((prev) => (prev?._id === reminder._id ? null : reminder));
+  }
+
+  // ── Bulk multi-select ───────────────────────────────────────────────────────
+  function enterSelectMode() {
+    setSelectedReminder(null); // close the single-item action bar
+    setCheckedIds([]);
+    setSelectMode(true);
+  }
+
+  function exitSelectMode() {
+    setSelectMode(false);
+    setCheckedIds([]);
+  }
+
+  function toggleChecked(id) {
+    setCheckedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
   }
 
   return (
@@ -66,18 +103,79 @@ export default function Dashboard() {
             </button>
 
             <button
-              className="text-textSecondary p-1 rounded-full hover:bg-gray-100 active:bg-gray-200 transition-colors"
+              onClick={() => setSearchOpen((v) => !v)}
+              className={`p-1 rounded-full hover:bg-gray-100 active:bg-gray-200 transition-colors
+                          ${searchOpen ? 'text-primary' : 'text-textSecondary'}`}
               aria-label="חיפוש"
+              aria-pressed={searchOpen}
             >
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                 <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>
             </button>
+
+            {/* Enter/exit bulk multi-select mode */}
+            <button
+              onClick={selectMode ? exitSelectMode : enterSelectMode}
+              className={`p-1 rounded-full hover:bg-gray-100 active:bg-gray-200 transition-colors
+                          ${selectMode ? 'text-primary' : 'text-textSecondary'}`}
+              aria-label={selectMode ? 'בטל בחירה מרובה' : 'בחירה מרובה'}
+              aria-pressed={selectMode}
+            >
+              {selectMode ? (
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              ) : (
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                </svg>
+              )}
+            </button>
           </div>
 
           {/* Title (right in RTL) */}
-          <h1 className="text-lg font-semibold text-textPrimary">תזכורות</h1>
+          <h1 className="text-lg font-semibold text-textPrimary">
+            {selectMode ? `נבחרו ${checkedIds.length}` : 'תזכורות'}
+          </h1>
         </div>
+
+        {/* Search input (toggled by the search icon) */}
+        {searchOpen && (
+          <div className="pb-2 animate-fade-in">
+            <div className="relative">
+              <input
+                autoFocus
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="חיפוש בתזכורות…"
+                className="w-full rounded-ios bg-gray-100 pr-9 pl-8 py-2 text-[15px]
+                           text-textPrimary outline-none focus:bg-gray-50
+                           border border-transparent focus:border-primary transition-colors"
+                dir="rtl"
+              />
+              <svg
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-textSecondary"
+                width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+              >
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              {query && (
+                <button
+                  onClick={() => setQuery('')}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 text-textSecondary
+                             p-0.5 rounded-full active:bg-gray-200"
+                  aria-label="נקה חיפוש"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Thin loading bar */}
         {isFetching && !isLoading && (
@@ -115,9 +213,12 @@ export default function Dashboard() {
         {/* Reminders list */}
         {!isLoading && !isError && (
           <ReminderList
-            reminders={reminders ?? []}
+            reminders={visibleReminders}
             selectedId={selectedReminder?._id ?? null}
             onSelect={toggleSelect}
+            selectMode={selectMode}
+            checkedIds={checkedIds}
+            onToggleCheck={toggleChecked}
             onQuickAdd={(sectionKey) => {
               // Pre-fill date based on section
               const dateMap = {
@@ -130,15 +231,33 @@ export default function Dashboard() {
         )}
       </main>
 
-      {/* ── Contextual action bar (shown when a row is selected) ────────────── */}
-      <ActionBar
-        reminder={selectedReminder}
-        onClose={() => setSelectedReminder(null)}
-        onEdit={(reminder) => setEditingReminder(reminder)}
-        onComplete={(id) => completeMutation.mutate(id)}
-        onSnooze={(id, minutes) => snoozeMutation.mutate({ id, minutes })}
-        onRemove={(id) => deleteMutation.mutate(id)}
-      />
+      {/* ── Contextual action bar (single-item; hidden during bulk select) ──── */}
+      {!selectMode && (
+        <ActionBar
+          reminder={selectedReminder}
+          onClose={() => setSelectedReminder(null)}
+          onEdit={(reminder) => setEditingReminder(reminder)}
+          onComplete={(id) => completeMutation.mutate(id)}
+          onSnooze={(id, payload) => snoozeMutation.mutate({ id, ...payload })}
+          onRemove={(id) => deleteMutation.mutate(id)}
+        />
+      )}
+
+      {/* ── Bulk action bar (shown in select mode) ──────────────────────────── */}
+      {selectMode && (
+        <BulkActionBar
+          count={checkedIds.length}
+          busy={bulkMutation.isPending}
+          onSelectAll={() => setCheckedIds(visibleReminders.map((r) => r._id))}
+          onClear={exitSelectMode}
+          onBulk={(action, payload) => {
+            bulkMutation.mutate(
+              { ids: checkedIds, action, ...payload },
+              { onSuccess: exitSelectMode }
+            );
+          }}
+        />
+      )}
 
       {/* ── Modals ─────────────────────────────────────────────────────────── */}
       <AddReminderModal

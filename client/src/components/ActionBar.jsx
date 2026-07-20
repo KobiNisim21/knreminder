@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import DateTimePicker from './DateTimePicker';
 
 const SNOOZE_CHOICES = [
   { minutes: 15, label: "15 דק'" },
@@ -6,6 +7,14 @@ const SNOOZE_CHOICES = [
   { minutes: 180, label: '3 שעות' },
   { minutes: 1440, label: 'מחר' },
 ];
+
+// Default target for the custom picker: tomorrow at 09:00.
+function defaultCustomDate() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  d.setHours(9, 0, 0, 0);
+  return d;
+}
 
 /**
  * ActionBar — Contextual bottom action bar shown when a reminder row is selected.
@@ -22,7 +31,8 @@ const SNOOZE_CHOICES = [
  *   onClose    {fn}           — clear the selection
  *   onEdit     {fn(reminder)} — open the edit modal
  *   onComplete {fn(id)}
- *   onSnooze   {fn(id, minutes)}
+ *   onSnooze   {fn(id, { minutes?, until? })}  — minutes for a preset, or an
+ *              absolute ISO `until` for the custom "מועד אחר" date/time.
  *   onRemove   {fn(id)}
  */
 export default function ActionBar({
@@ -33,8 +43,19 @@ export default function ActionBar({
   onSnooze,
   onRemove,
 }) {
-  const [showSnooze, setShowSnooze] = useState(false);
+  // 'actions' → the button row; 'snooze' → preset choices; 'custom' → date picker.
+  const [view, setView] = useState('actions');
+  const [customDate, setCustomDate] = useState(defaultCustomDate);
   const isOpen = !!reminder;
+
+  // Reset to the action row whenever a different reminder is selected (or the bar
+  // reopens) so it never reappears stuck on the snooze/custom sub-view.
+  useEffect(() => {
+    if (reminder) {
+      setView('actions');
+      setCustomDate(defaultCustomDate());
+    }
+  }, [reminder]);
 
   if (!isOpen) return null;
 
@@ -67,12 +88,12 @@ export default function ActionBar({
         role="toolbar"
         aria-label="פעולות על תזכורת"
       >
-        {showSnooze ? (
+        {view === 'snooze' ? (
           <div className="px-3 py-3">
             <div className="flex items-center justify-between px-2 pb-2">
               <span className="text-sm text-textSecondary">דחה ל…</span>
               <button
-                onClick={() => setShowSnooze(false)}
+                onClick={() => setView('actions')}
                 className="text-primary text-sm font-medium active:opacity-60"
               >
                 חזרה
@@ -82,14 +103,41 @@ export default function ActionBar({
               {SNOOZE_CHOICES.map((c) => (
                 <button
                   key={c.minutes}
-                  onClick={() => { onSnooze(reminder._id, c.minutes); onClose(); }}
+                  onClick={() => { onSnooze(reminder._id, { minutes: c.minutes }); onClose(); }}
                   className="flex-1 py-2.5 rounded-ios bg-gray-100 text-textPrimary
                              text-sm font-medium active:bg-gray-200 transition-colors"
                 >
                   {c.label}
                 </button>
               ))}
+              <button
+                onClick={() => { setCustomDate(defaultCustomDate()); setView('custom'); }}
+                className="flex-1 py-2.5 rounded-ios bg-primary/10 text-primary
+                           text-sm font-medium active:bg-primary/20 transition-colors"
+              >
+                מועד אחר
+              </button>
             </div>
+          </div>
+        ) : view === 'custom' ? (
+          <div className="px-3 py-3">
+            <div className="flex items-center justify-between px-2 pb-2">
+              <span className="text-sm text-textSecondary">בחר מועד</span>
+              <button
+                onClick={() => setView('snooze')}
+                className="text-primary text-sm font-medium active:opacity-60"
+              >
+                חזרה
+              </button>
+            </div>
+            <DateTimePicker value={customDate} onChange={setCustomDate} />
+            <button
+              onClick={() => { onSnooze(reminder._id, { until: customDate.toISOString() }); onClose(); }}
+              className="mt-3 w-full py-2.5 rounded-ios bg-primary text-white
+                         text-sm font-semibold active:opacity-80 transition-opacity"
+            >
+              דחה למועד זה
+            </button>
           </div>
         ) : (
           <div className="flex items-stretch justify-around px-1 py-2">
@@ -106,7 +154,7 @@ export default function ActionBar({
             <ActionButton
               label="דחה"
               color="text-amber-500"
-              onClick={() => setShowSnooze(true)}
+              onClick={() => setView('snooze')}
             >
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15 14" />
@@ -151,8 +199,7 @@ export default function ActionBar({
   );
 }
 
-function ActionButton({ label, color, onClick, children }) {
-  return (
+function ActionButton({ label, color, onClick, children }) {  return (
     <button
       onClick={onClick}
       className={`flex flex-col items-center justify-center gap-1 flex-1 py-1.5
