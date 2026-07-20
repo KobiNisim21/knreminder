@@ -29,6 +29,7 @@ export default function MonthGrid({
   month,
   selectedDate,
   remindersByDate,
+  holidays,
   onMonthChange,
   onDaySelect,
 }) {
@@ -122,12 +123,14 @@ export default function MonthGrid({
           const isToday      = key === todayKey;
           const isSelected   = key === selectedKey;
           const isCurrentMon = date.getMonth() === month;
+          const holidaySubject = holidays?.[key];
 
           return (
             <DayCell
               key={key}
               date={date}
               reminders={reminders}
+              holidaySubject={holidaySubject}
               isToday={isToday}
               isSelected={isSelected}
               isCurrentMonth={isCurrentMon}

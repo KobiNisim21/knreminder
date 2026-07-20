@@ -22,6 +22,7 @@ const MAX_DOTS = 3;
 export default function DayCell({
   date,
   reminders = [],
+  holidaySubject,
   isToday,
   isSelected,
   isCurrentMonth,
@@ -63,8 +64,14 @@ export default function DayCell({
       </div>
 
       {/* Reminder dot indicators */}
-      {count > 0 && (
-        <div className="flex gap-[3px] mt-0.5" aria-hidden="true">
+      {(count > 0 || holidaySubject) && (
+        <div className="flex gap-[3px] mt-0.5 items-center justify-center" aria-hidden="true">
+          {holidaySubject && (
+            <span
+              className="block w-1.5 h-1.5 rounded-full bg-orange-500 transition-colors"
+              title={holidaySubject}
+            />
+          )}
           {Array.from({ length: dotCount }).map((_, i) => (
             <span
               key={i}
