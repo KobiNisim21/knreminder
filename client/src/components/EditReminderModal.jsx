@@ -47,13 +47,13 @@ export default function EditReminderModal({ reminder, onClose }) {
   const [isImportant, setIsImportant] = useState(false);
   const [error, setError] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [resetKey, setResetKey] = useState(0);
-  // Tracks whether the user actually changed the date/time. When false we omit
-  // reminderAt from the PATCH so a text-only edit never touches the (possibly
-  // past) original date — the server then skips its future-date validation.
+  
+  // Tracks whether the user actually changed the date/time.
   const [timeTouched, setTimeTouched] = useState(false);
+  const [prevReminder, setPrevReminder] = useState(reminder);
 
-  useEffect(() => {
+  // Synchronously reset state when reminder changes
+  if (reminder !== prevReminder) {
     if (reminder) {
       setText(reminder.text ?? '');
       setReminderAt(new Date(reminder.reminderAt));
@@ -62,7 +62,12 @@ export default function EditReminderModal({ reminder, onClose }) {
       setError('');
       setShowDeleteConfirm(false);
       setTimeTouched(false);
-      setResetKey(Date.now()); // force remount of DateTimePicker
+    }
+    setPrevReminder(reminder);
+  }
+
+  useEffect(() => {
+    if (reminder) {
       setTimeout(() => textRef.current?.focus(), 350);
     }
   }, [reminder]);
@@ -200,7 +205,6 @@ export default function EditReminderModal({ reminder, onClose }) {
               <p className="text-xs text-textSecondary text-right">תאריך ושעה</p>
             </div>
             <DateTimePicker
-              key={resetKey}
               value={reminderAt}
               onChange={(d) => { setReminderAt(d); setTimeTouched(true); }}
               allowPast

@@ -43,21 +43,26 @@ export default function AddReminderModal({ isOpen, onClose, initialDate }) {
   const [recurrence, setRecurrence] = useState(null);
   const [isImportant, setIsImportant] = useState(false);
   const [error, setError] = useState('');
-  const [resetKey, setResetKey] = useState(0);
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
 
-  // Reset form when opened
+  // Synchronously reset state when modal opens
+  if (isOpen && !prevIsOpen) {
+    setText('');
+    setReminderAt(defaultDate());
+    setRecurrence(null);
+    setIsImportant(false);
+    setError('');
+    setPrevIsOpen(true);
+  } else if (!isOpen && prevIsOpen) {
+    setPrevIsOpen(false);
+  }
+
   useEffect(() => {
     if (isOpen) {
-      setText('');
-      setReminderAt(defaultDate());
-      setRecurrence(null);
-      setIsImportant(false);
-      setError('');
-      setResetKey(Date.now()); // force remount of DateTimePicker
       // Autofocus text input after animation settles
       setTimeout(() => textRef.current?.focus(), 350);
     }
-  }, [isOpen, initialDate]);
+  }, [isOpen]);
 
   // ── Mutation ───────────────────────────────────────────────────────────────
   const createMutation = useMutation({
@@ -176,7 +181,7 @@ export default function AddReminderModal({ isOpen, onClose, initialDate }) {
                 תאריך ושעה
               </p>
             </div>
-            <DateTimePicker key={resetKey} value={reminderAt} onChange={setReminderAt} allowPast />
+            <DateTimePicker value={reminderAt} onChange={setReminderAt} allowPast />
           </div>
 
           {/* ── Recurrence chips ────────────────────────────────────────── */}
