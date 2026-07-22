@@ -23,6 +23,7 @@ export default function DayCell({
   date,
   reminders = [],
   holidaySubject,
+  shabbatInfo,
   isToday,
   isSelected,
   isCurrentMonth,
@@ -65,12 +66,18 @@ export default function DayCell({
       </div>
 
       {/* Reminder dot indicators */}
-      {(count > 0 || holidaySubject || hasImportant) && (
+      {(count > 0 || holidaySubject || hasImportant || shabbatInfo) && (
         <div className="flex gap-[3px] mt-0.5 items-center justify-center" aria-hidden="true">
           {holidaySubject && (
             <span
               className="block w-1.5 h-1.5 rounded-full bg-orange-500 transition-colors"
               title={holidaySubject}
+            />
+          )}
+          {shabbatInfo && (
+            <span
+              className="block w-1.5 h-1.5 rounded-full bg-purple-500 transition-colors"
+              title={shabbatInfo.displayText}
             />
           )}
           {hasImportant && (

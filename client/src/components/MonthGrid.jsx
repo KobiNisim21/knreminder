@@ -30,6 +30,7 @@ export default function MonthGrid({
   selectedDate,
   remindersByDate,
   holidays,
+  shabbat,
   onMonthChange,
   onDaySelect,
 }) {
@@ -124,6 +125,7 @@ export default function MonthGrid({
           const isSelected   = key === selectedKey;
           const isCurrentMon = date.getMonth() === month;
           const holidaySubject = holidays?.[key];
+          const shabbatInfo = shabbat?.[key];
 
           return (
             <DayCell
@@ -131,6 +133,7 @@ export default function MonthGrid({
               date={date}
               reminders={reminders}
               holidaySubject={holidaySubject}
+              shabbatInfo={shabbatInfo}
               isToday={isToday}
               isSelected={isSelected}
               isCurrentMonth={isCurrentMon}

@@ -9,6 +9,7 @@ import EditReminderModal from '../components/EditReminderModal';
 import ActionBar from '../components/ActionBar';
 import BulkActionBar from '../components/BulkActionBar';
 import holidaysData from '../data/holidays.json';
+import shabbatData from '../data/shabbat.json';
 
 // Full Hebrew day names (Sunday=0 … Saturday=6)
 const DAY_NAMES_FULL = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
@@ -73,6 +74,7 @@ export default function CalendarView() {
     [selectedKey, remindersByDate]
   );
   const holidayForSelectedDay = selectedKey ? holidaysData[selectedKey] : null;
+  const shabbatForSelectedDay = selectedKey ? shabbatData[selectedKey] : null;
 
   // Count of reminders in the visible month (for the month summary chip)
   const monthReminderCount = useMemo(() => {
@@ -145,6 +147,7 @@ export default function CalendarView() {
           selectedDate={selectedDate}
           remindersByDate={remindersByDate}
           holidays={holidaysData}
+          shabbat={shabbatData}
           onMonthChange={handleMonthChange}
           onDaySelect={handleDaySelect}
         />
@@ -171,6 +174,9 @@ export default function CalendarView() {
             </p>
             {holidayForSelectedDay && (
               <p className="text-sm font-semibold text-orange-500 mt-0.5">{holidayForSelectedDay}</p>
+            )}
+            {shabbatForSelectedDay && (
+              <p className="text-sm font-semibold text-purple-600 mt-0.5">{shabbatForSelectedDay.displayText}</p>
             )}
             {!isSelectedToday && (
               <p className="text-xs text-textSecondary mt-0.5">{selectedDayLabel}</p>
