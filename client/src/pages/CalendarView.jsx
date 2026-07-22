@@ -104,7 +104,7 @@ export default function CalendarView() {
 
   function openAddForDay(date) {
     const d = new Date(date);
-    d.setHours(9, 0, 0, 0); // default to 09:00
+    d.setHours(10, 0, 0, 0); // default to 10:00 AM
     setAddModalDate(d);
     setAddModalOpen(true);
   }

@@ -33,9 +33,8 @@ export default function AddReminderModal({ isOpen, onClose, initialDate }) {
   // ── Form state ─────────────────────────────────────────────────────────────
   const defaultDate = () => {
     const d = initialDate ? new Date(initialDate) : new Date();
-    // Default to next full hour
-    d.setMinutes(0, 0, 0);
-    d.setHours(d.getHours() + 1);
+    // Default to 10:00 AM
+    d.setHours(10, 0, 0, 0);
     return d;
   };
 
