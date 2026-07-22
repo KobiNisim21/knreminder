@@ -43,6 +43,7 @@ export default function AddReminderModal({ isOpen, onClose, initialDate }) {
   const [recurrence, setRecurrence] = useState(null);
   const [isImportant, setIsImportant] = useState(false);
   const [error, setError] = useState('');
+  const [resetKey, setResetKey] = useState(0);
 
   // Reset form when opened
   useEffect(() => {
@@ -52,6 +53,7 @@ export default function AddReminderModal({ isOpen, onClose, initialDate }) {
       setRecurrence(null);
       setIsImportant(false);
       setError('');
+      setResetKey(Date.now()); // force remount of DateTimePicker
       // Autofocus text input after animation settles
       setTimeout(() => textRef.current?.focus(), 350);
     }
@@ -174,7 +176,7 @@ export default function AddReminderModal({ isOpen, onClose, initialDate }) {
                 תאריך ושעה
               </p>
             </div>
-            <DateTimePicker value={reminderAt} onChange={setReminderAt} allowPast />
+            <DateTimePicker key={resetKey} value={reminderAt} onChange={setReminderAt} allowPast />
           </div>
 
           {/* ── Recurrence chips ────────────────────────────────────────── */}
