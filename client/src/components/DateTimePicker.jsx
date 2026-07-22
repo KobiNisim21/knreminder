@@ -39,11 +39,29 @@ export default function DateTimePicker({ value, onChange, allowPast = false }) {
 
   const ITEM_HEIGHT = 44; // px per drum item
 
-  // Scroll to selected item on mount
+  // Sync with external value changes (and initial mount)
   useEffect(() => {
-    scrollTo(dateRef, dateIdx);
-    scrollTo(timeRef, timeIdx);
-  }, []);
+    if (!value) return;
+    const d = new Date(value);
+    const newDateIdx = findDateIndex(dateOptions, d);
+    const newTimeIdx = findTimeIndex(timeOptions, d);
+
+    // Only scroll if the external value differs from our local state.
+    // This prevents killing momentum when the change originated from user scrolling.
+    setDateIdx(prev => {
+      if (prev !== newDateIdx) {
+        requestAnimationFrame(() => scrollTo(dateRef, newDateIdx));
+      }
+      return newDateIdx;
+    });
+
+    setTimeIdx(prev => {
+      if (prev !== newTimeIdx) {
+        requestAnimationFrame(() => scrollTo(timeRef, newTimeIdx));
+      }
+      return newTimeIdx;
+    });
+  }, [value, dateOptions, timeOptions]);
 
   function scrollTo(ref, idx) {
     if (ref.current) {
