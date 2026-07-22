@@ -39,29 +39,11 @@ export default function DateTimePicker({ value, onChange, allowPast = false }) {
 
   const ITEM_HEIGHT = 44; // px per drum item
 
-  // Sync with external value changes (and initial mount)
+  // Scroll to selected item on mount
   useEffect(() => {
-    if (!value) return;
-    const d = new Date(value);
-    const newDateIdx = findDateIndex(dateOptions, d);
-    const newTimeIdx = findTimeIndex(timeOptions, d);
-
-    // Only scroll if the external value differs from our local state.
-    // This prevents killing momentum when the change originated from user scrolling.
-    setDateIdx(prev => {
-      if (prev !== newDateIdx) {
-        requestAnimationFrame(() => scrollTo(dateRef, newDateIdx));
-      }
-      return newDateIdx;
-    });
-
-    setTimeIdx(prev => {
-      if (prev !== newTimeIdx) {
-        requestAnimationFrame(() => scrollTo(timeRef, newTimeIdx));
-      }
-      return newTimeIdx;
-    });
-  }, [value, dateOptions, timeOptions]);
+    scrollTo(dateRef, dateIdx);
+    scrollTo(timeRef, timeIdx);
+  }, []);
 
   function scrollTo(ref, idx) {
     if (ref.current) {
@@ -246,8 +228,12 @@ function buildTimeOptions() {
 
 function findDateIndex(options, date) {
   const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  const idx = options.findIndex((o) => o.date.getTime() === d.getTime());
+  const idx = options.findIndex(
+    (o) =>
+      o.date.getFullYear() === d.getFullYear() &&
+      o.date.getMonth() === d.getMonth() &&
+      o.date.getDate() === d.getDate()
+  );
   return Math.max(0, idx);
 }
 
