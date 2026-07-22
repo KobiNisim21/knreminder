@@ -44,6 +44,7 @@ export default function EditReminderModal({ reminder, onClose }) {
   const [text, setText] = useState('');
   const [reminderAt, setReminderAt] = useState(new Date());
   const [recurrence, setRecurrence] = useState(null);
+  const [isImportant, setIsImportant] = useState(false);
   const [error, setError] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   // Tracks whether the user actually changed the date/time. When false we omit
@@ -56,6 +57,7 @@ export default function EditReminderModal({ reminder, onClose }) {
       setText(reminder.text ?? '');
       setReminderAt(new Date(reminder.reminderAt));
       setRecurrence(reminder.recurrence?.frequency ?? null);
+      setIsImportant(reminder.isImportant ?? false);
       setError('');
       setShowDeleteConfirm(false);
       setTimeTouched(false);
@@ -85,6 +87,7 @@ export default function EditReminderModal({ reminder, onClose }) {
       text: text.trim(),
       isRecurring: recurrence !== null,
       recurrence: recurrence ? { frequency: recurrence } : null,
+      isImportant,
     };
     // Only send reminderAt if the user actually adjusted the picker. Omitting it
     // preserves the original date (even if it's in the past) and lets the server
@@ -180,7 +183,20 @@ export default function EditReminderModal({ reminder, onClose }) {
 
           {/* DateTimePicker */}
           <div className="px-3 py-2 border-b border-divider">
-            <p className="text-xs text-textSecondary text-right px-2 mb-1">תאריך ושעה</p>
+            <div className="flex justify-between items-center px-2 mb-1">
+              <button
+                type="button"
+                onClick={() => setIsImportant(!isImportant)}
+                className={`flex items-center gap-1.5 text-sm font-medium transition-colors
+                  ${isImportant ? 'text-amber-500' : 'text-textSecondary'}`}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill={isImportant ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                </svg>
+                חשוב
+              </button>
+              <p className="text-xs text-textSecondary text-right">תאריך ושעה</p>
+            </div>
             <DateTimePicker
               value={reminderAt}
               onChange={(d) => { setReminderAt(d); setTimeTouched(true); }}

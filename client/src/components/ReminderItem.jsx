@@ -113,8 +113,8 @@ export default function ReminderItem({
         <div
           className={`absolute inset-0 flex items-center
                       ${revealing === 'snooze'
-                        ? 'bg-gray-400 justify-start'
-                        : 'bg-accent justify-end'}`}
+                        ? 'bg-orange-500 justify-start'
+                        : 'bg-green-500 justify-end'}`}
         >
           <div className={`flex flex-col items-center gap-0.5 text-white px-6
                            transition-transform ${passedThreshold ? 'scale-110' : 'scale-100'}`}>
@@ -199,11 +199,18 @@ export default function ReminderItem({
         </div>
 
         {/* Text column */}
-        <div className="flex-1 min-w-0">
-          <p className={`text-[15px] leading-snug
-                        ${overdue ? 'text-accent font-medium' : 'text-textPrimary'}`}>
-            {reminder.text}
-          </p>
+        <div className="flex-1 min-w-0 flex flex-col justify-center">
+          <div className="flex items-center gap-1.5">
+            <p className={`text-[15px] leading-snug
+                          ${overdue ? 'text-accent font-medium' : 'text-textPrimary'}`}>
+              {reminder.text}
+            </p>
+            {reminder.isImportant && (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="text-amber-500 flex-shrink-0" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+              </svg>
+            )}
+          </div>
           {reminder.isRecurring && reminder.recurrence && (
             <span className="text-[11px] text-textSecondary">
               {RECURRENCE_LABELS[reminder.recurrence.frequency]}

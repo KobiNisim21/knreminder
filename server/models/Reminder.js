@@ -81,6 +81,9 @@ const ReminderSchema = new mongoose.Schema(
     isRecurring: { type: Boolean, default: false },
     recurrence: { type: RecurrenceSchema, default: null },
 
+    // ── Importance ───────────────────────────────────────────────────────────────
+    isImportant: { type: Boolean, default: false },
+
     // ── Status lifecycle: active → snoozed → completed ───────────────────────────
     status: {
       type: String,

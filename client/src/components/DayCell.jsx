@@ -36,6 +36,7 @@ export default function DayCell({
   const count      = reminders.length;
   const dotCount   = Math.min(count, MAX_DOTS);
   const hasOverdue = reminders.some((r) => r.status === 'active' && new Date(r.reminderAt) < new Date());
+  const hasImportant = reminders.some((r) => r.isImportant);
   const dateKey    = toDateKey(date);
 
   return (
@@ -64,7 +65,7 @@ export default function DayCell({
       </div>
 
       {/* Reminder dot indicators */}
-      {(count > 0 || holidaySubject) && (
+      {(count > 0 || holidaySubject || hasImportant) && (
         <div className="flex gap-[3px] mt-0.5 items-center justify-center" aria-hidden="true">
           {holidaySubject && (
             <span
@@ -72,11 +73,17 @@ export default function DayCell({
               title={holidaySubject}
             />
           )}
-          {Array.from({ length: dotCount }).map((_, i) => (
+          {hasImportant && (
+            <span
+              className="block w-1.5 h-1.5 rounded-full bg-green-500 transition-colors"
+              title="חשוב"
+            />
+          )}
+          {Array.from({ length: Math.max(0, dotCount - (hasImportant ? 1 : 0)) }).map((_, i) => (
             <span
               key={i}
               className={`block w-1.5 h-1.5 rounded-full transition-colors
-                          ${i === 0 && hasOverdue ? 'bg-accent' : 'bg-primary'}`}
+                          ${i === 0 && hasOverdue && !hasImportant ? 'bg-accent' : 'bg-primary'}`}
             />
           ))}
           {/* "+" label when more than MAX_DOTS */}

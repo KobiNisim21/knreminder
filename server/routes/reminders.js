@@ -100,7 +100,7 @@ router.post(
 
     const ALLOWED = [
       'text', 'type', 'personName', 'birthYear', 'reminderAt',
-      'isRecurring', 'recurrence', 'status', 'completedAt',
+      'isRecurring', 'recurrence', 'isImportant', 'status', 'completedAt',
       'snoozeCount', 'originalReminderAt', 'notified', 'expiresAt',
     ];
 
@@ -187,18 +187,10 @@ router.get(
 router.post(
   '/',
   asyncHandler(async (req, res) => {
-    const { text, reminderAt, isRecurring, recurrence, type, personName, birthYear } =
+    const { text, reminderAt, isRecurring, recurrence, isImportant, type, personName, birthYear } =
       req.body;
 
     const isBirthday = type === 'birthday';
-
-    // Validate that the reminder time is in the future
-    if (new Date(reminderAt) <= new Date()) {
-      return res.status(400).json({
-        success: false,
-        message: 'מועד התזכורת חייב להיות בעתיד',
-      });
-    }
 
     // Birthday-specific validation
     if (isBirthday && !personName?.trim()) {
@@ -228,6 +220,7 @@ router.post(
             reminderAt: new Date(reminderAt),
             isRecurring: true,
             recurrence: { frequency: 'yearly' },
+            isImportant: isImportant || false,
           }
         : {
             chatId: req.chatId,
@@ -236,6 +229,7 @@ router.post(
             reminderAt: new Date(reminderAt),
             isRecurring: isRecurring || false,
             recurrence: isRecurring ? recurrence : null,
+            isImportant: isImportant || false,
           }
     );
 
@@ -262,13 +256,14 @@ router.patch(
       });
     }
 
-    const { text, reminderAt, isRecurring, recurrence, personName, birthYear } =
+    const { text, reminderAt, isRecurring, recurrence, isImportant, personName, birthYear } =
       req.body;
 
     const isBirthday = reminder.type === 'birthday';
 
     let timeChanged = false;
     if (text !== undefined) reminder.text = text;
+    if (isImportant !== undefined) reminder.isImportant = isImportant;
     if (personName !== undefined) reminder.personName = personName;
     if (birthYear !== undefined) reminder.birthYear = birthYear;
     if (reminderAt !== undefined) {
