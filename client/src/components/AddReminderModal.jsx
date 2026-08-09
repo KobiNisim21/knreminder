@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { remindersApi } from '../api/reminders';
+import { useQueryClient } from '@tanstack/react-query';
+import { useReminderMutations } from '../hooks/useReminderMutations';
 import DateTimePicker from './DateTimePicker';
 
 const RECURRENCE_OPTIONS = [
@@ -27,7 +27,7 @@ const RECURRENCE_OPTIONS = [
  *   initialDate    {Date|null}  — pre-filled date (e.g. from section quick-add)
  */
 export default function AddReminderModal({ isOpen, onClose, initialDate }) {
-  const queryClient = useQueryClient();
+  const { createMutation } = useReminderMutations();
   const textRef = useRef(null);
 
   // ── Form state ─────────────────────────────────────────────────────────────
@@ -64,17 +64,7 @@ export default function AddReminderModal({ isOpen, onClose, initialDate }) {
     }
   }, [isOpen]);
 
-  // ── Mutation ───────────────────────────────────────────────────────────────
-  const createMutation = useMutation({
-    mutationFn: (payload) => remindersApi.create(payload),
-    onSuccess: () => {
-      // refetchQueries triggers an IMMEDIATE network fetch (not just "mark stale").
-      // This is what makes the new reminder appear instantly without re-opening the app.
-      queryClient.refetchQueries({ queryKey: ['reminders'], type: 'active' });
-      onClose();
-    },
-    onError: (err) => setError(err.message),
-  });
+  // Mutation is handled by useReminderMutations
 
   // ── Submit ─────────────────────────────────────────────────────────────────
   function handleSubmit(e) {
@@ -94,6 +84,8 @@ export default function AddReminderModal({ isOpen, onClose, initialDate }) {
       recurrence: recurrence ? { frequency: recurrence } : null,
       isImportant,
     });
+    
+    onClose();
   }
 
   // ── Backdrop click closes modal ────────────────────────────────────────────

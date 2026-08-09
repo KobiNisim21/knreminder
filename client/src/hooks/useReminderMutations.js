@@ -1,5 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { remindersApi } from '../api/reminders';
+import { addPendingAction, loadReminders, saveReminders } from '../utils/offlineStore';
+import { queueEventTarget } from '../utils/offlineQueue';
 
 /**
  * useReminderMutations — Centralised mutations hook.
@@ -26,44 +28,100 @@ export function useReminderMutations() {
     queryClient.refetchQueries({ queryKey: ['reminders', 'completed'], type: 'active' });
   };
 
-  // ── Complete ────────────────────────────────────────────────────────────────
+  const executeWithQueue = async (type, payload, apiCall) => {
+    if (navigator.onLine) {
+      return apiCall();
+    }
+    
+    // Offline mode - add to queue
+    const actionId = crypto.randomUUID();
+    const action = {
+      id: actionId,
+      type,
+      payload,
+      createdAt: Date.now(),
+      status: 'pending',
+      retries: 0
+    };
+    
+    await addPendingAction(action);
+    queueEventTarget.dispatchEvent(new Event('sync-update'));
+    
+    // Register background sync if supported
+    try {
+      if ('serviceWorker' in navigator && 'SyncManager' in window) {
+        const registration = await navigator.serviceWorker.ready;
+        await registration.sync.register('sync-pending-actions');
+      }
+    } catch (e) {
+      console.warn('Background sync not supported/failed', e);
+    }
+    
+    // Optimistic update
+    try {
+      const current = queryClient.getQueryData(['reminders']) || await loadReminders();
+      let next = [...current];
+      
+      if (type === 'create') {
+        next.unshift({
+          _id: actionId, // temp id
+          text: payload.text || payload.personName,
+          reminderAt: payload.reminderAt,
+          type: payload.type || 'reminder',
+          isImportant: payload.isImportant || false,
+          isRecurring: payload.isRecurring || false,
+          recurrence: payload.recurrence || null,
+          _pendingSync: true
+        });
+      } else if (type === 'update') {
+        next = next.map(r => r._id === payload.id ? { ...r, ...payload.data, _pendingSync: true } : r);
+      } else if (type === 'snooze') {
+        // Minimal optimistic snooze handling
+        next = next.map(r => r._id === payload.id ? { ...r, _pendingSync: true } : r);
+      } else if (type === 'complete' || type === 'delete') {
+        next = next.filter(r => r._id !== payload.id);
+      }
+      
+      queryClient.setQueryData(['reminders'], next);
+      await saveReminders(next);
+    } catch(e) {
+      console.error('Optimistic update failed', e);
+    }
+    
+    return { success: true, offline: true, _id: actionId };
+  };
+
+  const createMutation = useMutation({
+    mutationFn: (data) => executeWithQueue('create', data, () => remindersApi.create(data)),
+    onSuccess: refetchActive,
+  });
+
   const completeMutation = useMutation({
-    mutationFn: (id) => remindersApi.complete(id),
+    mutationFn: (id) => executeWithQueue('complete', { id }, () => remindersApi.complete(id)),
     onSuccess: refetchAll,
   });
 
-  // ── Delete ──────────────────────────────────────────────────────────────────
   const deleteMutation = useMutation({
-    mutationFn: (id) => remindersApi.delete(id),
+    mutationFn: (id) => executeWithQueue('delete', { id }, () => remindersApi.delete(id)),
     onSuccess: refetchActive,
   });
 
-  // ── Update (text / time / recurrence) ──────────────────────────────────────
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => remindersApi.update(id, data),
+    mutationFn: ({ id, data }) => executeWithQueue('update', { id, data }, () => remindersApi.update(id, data)),
     onSuccess: refetchActive,
   });
 
-  // ── Snooze ──────────────────────────────────────────────────────────────────
-  // Accepts either { id, minutes } for a relative snooze or { id, until } with an
-  // absolute ISO datetime for a custom "snooze to a specific moment".
   const snoozeMutation = useMutation({
-    mutationFn: ({ id, minutes, until }) => remindersApi.snooze(id, { minutes, until }),
+    mutationFn: ({ id, minutes, until }) => executeWithQueue('snooze', { id, arg: { minutes, until } }, () => remindersApi.snooze(id, { minutes, until })),
     onSuccess: refetchActive,
   });
 
-  // ── Bulk actions ──────────────────────────────────────────────────────────────
-  // Apply one action to many reminders at once. Each fires its own request in
-  // parallel (Promise.allSettled so one failure doesn't abort the rest), then we
-  // refetch a single time after the whole batch settles instead of per-item.
-  // The mutationFn resolves to { ok, failed } so the caller can report partial
-  // failures. `action` is 'complete' | 'delete' | 'snooze'.
   const bulkMutation = useMutation({
     mutationFn: async ({ ids, action, minutes, until }) => {
       const call = (id) => {
-        if (action === 'complete') return remindersApi.complete(id);
-        if (action === 'delete') return remindersApi.delete(id);
-        if (action === 'snooze') return remindersApi.snooze(id, { minutes, until });
+        if (action === 'complete') return executeWithQueue('complete', { id }, () => remindersApi.complete(id));
+        if (action === 'delete') return executeWithQueue('delete', { id }, () => remindersApi.delete(id));
+        if (action === 'snooze') return executeWithQueue('snooze', { id, arg: { minutes, until } }, () => remindersApi.snooze(id, { minutes, until }));
         throw new Error(`unknown bulk action: ${action}`);
       };
       const results = await Promise.allSettled((ids ?? []).map(call));
@@ -74,6 +132,7 @@ export function useReminderMutations() {
   });
 
   return {
+    createMutation,
     completeMutation,
     deleteMutation,
     updateMutation,

@@ -49,7 +49,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     const code = error?.response?.data?.code;
-    if (error?.response?.status === 401 && (code === 'BAD_TOKEN' || code === 'NO_CHAT_ID')) {
+    if (error?.response && error.response.status === 401 && (code === 'BAD_TOKEN' || code === 'NO_CHAT_ID')) {
       window.dispatchEvent(new CustomEvent('knr:auth-expired'));
     }
     return Promise.reject(error);

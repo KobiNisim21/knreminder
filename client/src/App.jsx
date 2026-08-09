@@ -9,6 +9,7 @@ import BirthdaySettings from './pages/BirthdaySettings';
 import BackupRestore from './pages/BackupRestore';
 import Login from './pages/Login';
 import InstallPrompt from './components/InstallPrompt';
+import OfflineBanner from './components/OfflineBanner';
 import { useAuth } from './context/AuthContext';
 
 function App() {
@@ -23,6 +24,7 @@ function App() {
 
   return (
     <BrowserRouter>
+      <OfflineBanner />
       <Routes>
         <Route path="/"          element={<Dashboard />} />
         <Route path="/birthdays" element={<Birthdays />} />

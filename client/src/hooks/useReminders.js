@@ -1,5 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { remindersApi } from '../api/reminders';
+import { 
+  saveReminders, loadReminders, 
+  saveCompleted, loadCompleted, 
+  saveBirthdays, loadBirthdays,
+  setLastSyncTime
+} from '../utils/offlineStore';
 
 /**
  * useReminders — React Query hook for active reminders list.
@@ -11,17 +17,20 @@ export function useReminders() {
   return useQuery({
     queryKey: ['reminders'],
     queryFn: async () => {
-      // The axios interceptor already returns response.data (the full body).
-      // The server responds: { success: true, count: N, data: [...] }
-      // So we extract .data here to get the reminders array.
-      const body = await remindersApi.getAll();
-      // body is the full parsed JSON: { success, count, data: [...] }
-      // If the interceptor already unwrapped to body.data, handle both cases safely:
-      return Array.isArray(body) ? body : (Array.isArray(body?.data) ? body.data : []);
+      try {
+        const body = await remindersApi.getAll();
+        const data = Array.isArray(body) ? body : (Array.isArray(body?.data) ? body.data : []);
+        await saveReminders(data);
+        await setLastSyncTime(Date.now());
+        return data;
+      } catch (err) {
+        const cached = await loadReminders();
+        if (cached && cached.length > 0) return cached;
+        throw err;
+      }
     },
     refetchInterval: 60_000,
     refetchOnWindowFocus: true,
-    // Return empty array while loading to avoid undefined spread errors
     placeholderData: [],
   });
 }
@@ -33,8 +42,16 @@ export function useCompletedReminders() {
   return useQuery({
     queryKey: ['reminders', 'completed'],
     queryFn: async () => {
-      const body = await remindersApi.getCompleted();
-      return Array.isArray(body) ? body : (Array.isArray(body?.data) ? body.data : []);
+      try {
+        const body = await remindersApi.getCompleted();
+        const data = Array.isArray(body) ? body : (Array.isArray(body?.data) ? body.data : []);
+        await saveCompleted(data);
+        return data;
+      } catch (err) {
+        const cached = await loadCompleted();
+        if (cached && cached.length > 0) return cached;
+        throw err;
+      }
     },
     placeholderData: [],
   });
@@ -50,8 +67,16 @@ export function useBirthdays() {
   return useQuery({
     queryKey: ['reminders', 'birthdays'],
     queryFn: async () => {
-      const body = await remindersApi.getBirthdays();
-      return Array.isArray(body) ? body : (Array.isArray(body?.data) ? body.data : []);
+      try {
+        const body = await remindersApi.getBirthdays();
+        const data = Array.isArray(body) ? body : (Array.isArray(body?.data) ? body.data : []);
+        await saveBirthdays(data);
+        return data;
+      } catch (err) {
+        const cached = await loadBirthdays();
+        if (cached && cached.length > 0) return cached;
+        throw err;
+      }
     },
     refetchInterval: 60_000,
     refetchOnWindowFocus: true,

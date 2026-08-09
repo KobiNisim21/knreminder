@@ -12,8 +12,12 @@ const queryClient = new QueryClient({
     queries: {
       staleTime: 30_000,      // 30 seconds before re-fetching
       refetchOnWindowFocus: true,
-      retry: 2,
+      retry: 1,
+      networkMode: 'offlineFirst',
     },
+    mutations: {
+      networkMode: 'offlineFirst',
+    }
   },
 });
 

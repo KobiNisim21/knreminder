@@ -10,7 +10,7 @@
  * Cache names are versioned — bump CACHE_VERSION to force a full cache refresh on deploy.
  */
 
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const STATIC_CACHE  = `kn-reminder-static-${CACHE_VERSION}`;
 const API_CACHE     = `kn-reminder-api-${CACHE_VERSION}`;
 const ALL_CACHES    = [STATIC_CACHE, API_CACHE];
@@ -65,8 +65,10 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Only handle GET requests from our own origin
-  if (request.method !== 'GET' || url.origin !== self.location.origin) {
+  // Only handle GET requests from our own origin or Google Fonts
+  const isGoogleFont = url.origin === 'https://fonts.googleapis.com' || url.origin === 'https://fonts.gstatic.com';
+  
+  if (request.method !== 'GET' || (url.origin !== self.location.origin && !isGoogleFont)) {
     return;
   }
 
@@ -80,7 +82,10 @@ self.addEventListener('fetch', (event) => {
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
-        .catch(() => caches.match('/index.html'))
+        .catch(async () => {
+          const cache = await caches.open(STATIC_CACHE);
+          return cache.match('/index.html');
+        })
     );
     return;
   }
@@ -178,4 +183,19 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const url = event.notification.data?.url || '/';
   event.waitUntil(clients.openWindow(url));
+});
+
+// ─── Background Sync ──────────────────────────────────────────────────────────
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'sync-pending-actions') {
+    // Send a message to all connected clients to trigger their queue processor
+    // (since the DB is complex and we rely on React Query, we let the client tab do the work if it's open)
+    event.waitUntil(
+      clients.matchAll({ type: 'window' }).then(windowClients => {
+        for (const client of windowClients) {
+          client.postMessage({ type: 'SYNC_NOW' });
+        }
+      })
+    );
+  }
 });

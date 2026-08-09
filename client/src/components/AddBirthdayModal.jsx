@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { remindersApi } from '../api/reminders';
+import { useQueryClient } from '@tanstack/react-query';
+import { useReminderMutations } from '../hooks/useReminderMutations';
 import DateTimePicker from './DateTimePicker';
 
 /**
@@ -17,7 +17,7 @@ import DateTimePicker from './DateTimePicker';
  *   onClose  {fn}
  */
 export default function AddBirthdayModal({ isOpen, onClose }) {
-  const queryClient = useQueryClient();
+  const { createMutation } = useReminderMutations();
   const nameRef = useRef(null);
 
   // Default the next occurrence to tomorrow at 10:00 (matches the reference feed)
@@ -45,14 +45,7 @@ export default function AddBirthdayModal({ isOpen, onClose }) {
     }
   }, [isOpen]);
 
-  const createMutation = useMutation({
-    mutationFn: (payload) => remindersApi.create(payload),
-    onSuccess: () => {
-      queryClient.refetchQueries({ queryKey: ['reminders', 'birthdays'], type: 'active' });
-      onClose();
-    },
-    onError: (err) => setError(err.message),
-  });
+
 
   function handleSubmit(e) {
     e.preventDefault();
@@ -80,6 +73,8 @@ export default function AddBirthdayModal({ isOpen, onClose }) {
       birthYear: year,
       reminderAt: reminderAt.toISOString(),
     });
+    
+    onClose();
   }
 
   if (!isOpen) return null;
