@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const PushPreferencesSchema = new mongoose.Schema(
   {
     enabled: { type: Boolean, default: true },
+    allReminders: { type: Boolean, default: false },
     importantReminders: { type: Boolean, default: true },
     birthdays: { type: Boolean, default: true },
     holidays: { type: Boolean, default: false },

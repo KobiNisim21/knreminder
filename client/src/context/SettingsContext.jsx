@@ -19,7 +19,7 @@ import { createContext, useContext, useEffect, useState, useCallback } from 'rea
  *     inAdvance:    string   // one of IN_ADVANCE_OPTIONS values
  *   }
  *   notifications: {
- *     enabled, importantReminders, birthdays, holidays, shabbat: boolean
+ *     enabled, allReminders, importantReminders, birthdays, holidays, shabbat: boolean
  *   }
  */
 
@@ -68,6 +68,7 @@ export const DEFAULT_SETTINGS = {
   },
   notifications: {
     enabled: false,
+    allReminders: false,
     importantReminders: true,
     birthdays: true,
     holidays: false,

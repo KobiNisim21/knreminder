@@ -104,19 +104,27 @@ async function sendToSubscription(doc, payload) {
 }
 
 async function sendReminderPush(reminder) {
-  if (!reminder.isImportant || reminder.type === 'birthday') {
+  if (reminder.type === 'birthday') {
     return { attempted: 0, sent: 0 };
   }
 
+  const reminderPreference = reminder.isImportant
+    ? {
+        $or: [
+          { 'preferences.allReminders': true },
+          { 'preferences.importantReminders': true },
+        ],
+      }
+    : { 'preferences.allReminders': true };
   const subscriptions = await PushSubscription.find({
     chatId: reminder.chatId,
     'preferences.enabled': true,
-    'preferences.importantReminders': true,
+    ...reminderPreference,
   });
   const results = await Promise.all(
     subscriptions.map((subscription) =>
       sendToSubscription(subscription, {
-        title: '⭐ תזכורת חשובה',
+        title: reminder.isImportant ? '⭐ תזכורת חשובה' : '🔔 תזכורת',
         body: reminder.text,
         url: `/?reminder=${reminder._id}`,
         tag: `reminder-${reminder._id}`,

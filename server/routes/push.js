@@ -8,7 +8,7 @@ const { getPublicKey, sendToSubscription } = require('../services/pushService');
 const router = express.Router();
 
 const ALLOWED_PREFERENCES = [
-  'enabled', 'importantReminders', 'birthdays', 'holidays', 'shabbat',
+  'enabled', 'allReminders', 'importantReminders', 'birthdays', 'holidays', 'shabbat',
   'birthdayDaysBefore', 'birthdayNotificationTime', 'calendarNotificationTime', 'timezone',
 ];
 

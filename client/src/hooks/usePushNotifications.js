@@ -69,6 +69,7 @@ export function usePushNotifications() {
         if (subscription) {
           return pushApi.subscribe(subscription.toJSON(), {
             enabled: settings.notifications.enabled,
+            allReminders: settings.notifications.allReminders,
             importantReminders: settings.notifications.importantReminders,
             birthdays: settings.notifications.birthdays,
             holidays: settings.notifications.holidays,
@@ -84,6 +85,7 @@ export function usePushNotifications() {
   }, [
     state.subscribed,
     settings.notifications.enabled,
+    settings.notifications.allReminders,
     settings.notifications.importantReminders,
     settings.notifications.birthdays,
     settings.notifications.holidays,

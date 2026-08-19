@@ -84,7 +84,7 @@ export default function Settings() {
             ? <span role="alert" className="font-medium text-red-600">{push.error}</span>
             : (!push.supported && !push.loading
             ? 'הדפדפן הזה אינו תומך בפוש. ב-iPhone יש להתקין את האפליקציה במסך הבית.'
-            : 'ימי הולדת נשלחים לפי ההגדרות במסך ימי הולדת. חגים נשלחים יום לפני וזמני שבת ביום שישי, בשעה 10:00.')
+            : 'תזכורות נשלחות בדיוק במועד שנקבע. אפשר לבחור את כולן או חשובות בלבד. חגים נשלחים יום לפני וזמני שבת ביום שישי ב-10:00.')
         }
       >
         <Row first label="התראות במכשיר">
@@ -95,9 +95,14 @@ export default function Settings() {
             onChange={togglePush}
           />
         </Row>
-        <Row label="תזכורות חשובות">
-          <Toggle label="תזכורות חשובות" checked={settings.notifications.importantReminders}
+        <Row label="כל התזכורות">
+          <Toggle label="כל התזכורות" checked={settings.notifications.allReminders}
             disabled={!push.subscribed}
+            onChange={(value) => updateNotifications({ allReminders: value })} />
+        </Row>
+        <Row label="תזכורות חשובות בלבד">
+          <Toggle label="תזכורות חשובות בלבד" checked={!settings.notifications.allReminders && settings.notifications.importantReminders}
+            disabled={!push.subscribed || settings.notifications.allReminders}
             onChange={(value) => updateNotifications({ importantReminders: value })} />
         </Row>
         <Row label="ימי הולדת">
