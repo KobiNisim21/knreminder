@@ -80,8 +80,9 @@ export default function Settings() {
       <Section
         caption="התראות פוש"
         footer={
-          push.error ||
-          (!push.supported && !push.loading
+          push.error
+            ? <span role="alert" className="font-medium text-red-600">{push.error}</span>
+            : (!push.supported && !push.loading
             ? 'הדפדפן הזה אינו תומך בפוש. ב-iPhone יש להתקין את האפליקציה במסך הבית.'
             : 'ימי הולדת נשלחים לפי ההגדרות במסך ימי הולדת. חגים נשלחים יום לפני וזמני שבת ביום שישי, בשעה 10:00.')
         }

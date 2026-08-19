@@ -102,15 +102,17 @@ export function usePushNotifications() {
         throw new Error('ב-iPhone יש להתקין קודם את האפליקציה במסך הבית');
       }
 
+      // Verify the server is configured before showing the operating-system
+      // permission prompt. Otherwise Android can grant permission while device
+      // registration still fails, leaving the switch off with no clear cause.
+      const { publicKey } = await pushApi.getPublicKey();
+
       const permission = await Notification.requestPermission();
       if (permission !== 'granted') {
         throw new Error('הרשאת ההתראות לא אושרה. ניתן לאפשר אותה בהגדרות המכשיר.');
       }
 
-      const [{ publicKey }, registration] = await Promise.all([
-        pushApi.getPublicKey(),
-        navigator.serviceWorker.ready,
-      ]);
+      const registration = await navigator.serviceWorker.ready;
       let subscription = await registration.pushManager.getSubscription();
       if (!subscription) {
         subscription = await registration.pushManager.subscribe({

@@ -1,4 +1,5 @@
 const path = require('path');
+const crypto = require('crypto');
 const webpush = require('web-push');
 
 const PushSubscription = require('../models/PushSubscription');
@@ -9,25 +10,58 @@ const MAX_RECENT_KEYS = 60;
 
 let calendarData;
 let vapidConfigured = false;
+let activePublicKey = null;
+
+function toBase64Url(buffer) {
+  return buffer.toString('base64url');
+}
+
+function deriveVapidKeys(secret) {
+  // VAPID uses a P-256 key pair. Deriving it from an existing server-only
+  // secret keeps the key stable across deploys without exposing that secret.
+  for (let counter = 0; counter < 10; counter += 1) {
+    const privateKey = crypto
+      .createHmac('sha256', secret)
+      .update(`kn-reminder-vapid:${counter}`)
+      .digest();
+    const ecdh = crypto.createECDH('prime256v1');
+    try {
+      ecdh.setPrivateKey(privateKey);
+      return {
+        publicKey: toBase64Url(ecdh.getPublicKey()),
+        privateKey: toBase64Url(privateKey),
+      };
+    } catch {
+      // Extremely unlikely invalid P-256 scalar; try the next counter.
+    }
+  }
+  throw new Error('Could not derive a valid VAPID key pair');
+}
 
 function configureVapid() {
   if (vapidConfigured) return true;
 
-  const publicKey = process.env.VAPID_PUBLIC_KEY;
-  const privateKey = process.env.VAPID_PRIVATE_KEY;
-  if (!publicKey || !privateKey) return false;
+  let publicKey = process.env.VAPID_PUBLIC_KEY?.trim();
+  let privateKey = process.env.VAPID_PRIVATE_KEY?.trim();
+  if (!publicKey || !privateKey) {
+    const fallbackSecret =
+      process.env.SESSION_SECRET?.trim() || process.env.TELEGRAM_BOT_TOKEN?.trim();
+    if (!fallbackSecret) return false;
+    ({ publicKey, privateKey } = deriveVapidKeys(fallbackSecret));
+  }
 
   webpush.setVapidDetails(
     process.env.VAPID_SUBJECT || 'mailto:admin@knreminder.app',
     publicKey,
     privateKey
   );
+  activePublicKey = publicKey;
   vapidConfigured = true;
   return true;
 }
 
 function getPublicKey() {
-  return configureVapid() ? process.env.VAPID_PUBLIC_KEY : null;
+  return configureVapid() ? activePublicKey : null;
 }
 
 function loadCalendarData() {

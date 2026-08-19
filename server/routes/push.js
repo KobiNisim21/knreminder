@@ -6,7 +6,6 @@ const resolveUser = require('../middleware/resolveUser');
 const { getPublicKey, sendToSubscription } = require('../services/pushService');
 
 const router = express.Router();
-router.use(resolveUser);
 
 const ALLOWED_PREFERENCES = [
   'enabled', 'importantReminders', 'birthdays', 'holidays', 'shabbat',
@@ -30,6 +29,10 @@ router.get('/vapid-public-key', (req, res) => {
   }
   res.json({ success: true, publicKey });
 });
+
+// The VAPID public key is intentionally public. All subscription mutations and
+// test sends below remain protected by the signed user session.
+router.use(resolveUser);
 
 router.post('/subscriptions', asyncHandler(async (req, res) => {
   const { subscription, preferences } = req.body || {};

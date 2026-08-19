@@ -116,7 +116,11 @@ curl -X POST https://YOUR-SERVER-URL/api/telegram/setup-webhook \
 
 ## 🔔 Web Push Setup
 
-Generate one VAPID key pair (once):
+The server automatically derives a stable VAPID key pair from `SESSION_SECRET`
+(or `TELEGRAM_BOT_TOKEN` when no session secret is configured), so Web Push
+works without adding another production secret.
+
+For independent key rotation, you can optionally generate a dedicated pair:
 
 ```bash
 cd server
@@ -124,7 +128,8 @@ npm run vapid:generate
 ```
 
 Add the generated keys to `server/.env` locally and to the backend hosting
-environment in production. Never expose the private key to Vite/the client.
+environment in production. Explicit keys override the automatic fallback.
+Never expose the private key to Vite/the client.
 
 ```env
 VAPID_PUBLIC_KEY=...
