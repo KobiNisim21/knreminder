@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { setAuthToken } from '../api/reminders';
+import { pushApi, setAuthToken } from '../api/reminders';
 
 /**
  * AuthContext — global authentication state for the multi-user app.
@@ -40,7 +40,25 @@ export function AuthProvider({ children }) {
     setAuthToken(session?.token ?? null);
   }, [session]);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async ({ cleanupPush = true } = {}) => {
+    // A browser subscription outlives LocalStorage. Remove it before dropping
+    // the auth token so a shared device never receives the previous user's push.
+    if (cleanupPush && 'serviceWorker' in navigator && 'PushManager' in window) {
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+        if (subscription) {
+          try {
+            await pushApi.unsubscribe(subscription.endpoint);
+          } catch {
+            // Still invalidate the browser endpoint when the server is offline.
+          }
+          await subscription.unsubscribe();
+        }
+      } catch {
+        // Logout must always succeed even if push cleanup is unavailable.
+      }
+    }
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch {
@@ -82,7 +100,7 @@ export function AuthProvider({ children }) {
   // interceptor fires this event — drop the dead session so App shows Login.
   useEffect(() => {
     function onExpired() {
-      logout();
+      logout({ cleanupPush: false });
     }
     window.addEventListener('knr:auth-expired', onExpired);
     return () => window.removeEventListener('knr:auth-expired', onExpired);

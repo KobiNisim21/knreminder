@@ -5,7 +5,7 @@ A personal reminder PWA inspired by **BZ Reminder** — built with the MERN stac
 - **Frontend**: React + Vite + Tailwind CSS (PWA, iOS home screen ready)
 - **Backend**: Node.js + Express + Mongoose + Agenda.js
 - **Database**: MongoDB Atlas (with 90-day TTL auto-cleanup)
-- **Notifications**: Telegram Bot with Hebrew inline keyboard (Snooze / Done)
+- **Notifications**: Telegram Bot + Web Push for installed mobile PWAs
 
 ---
 
@@ -114,6 +114,30 @@ curl -X POST https://YOUR-SERVER-URL/api/telegram/setup-webhook \
 
 ---
 
+## 🔔 Web Push Setup
+
+Generate one VAPID key pair (once):
+
+```bash
+cd server
+npm run vapid:generate
+```
+
+Add the generated keys to `server/.env` locally and to the backend hosting
+environment in production. Never expose the private key to Vite/the client.
+
+```env
+VAPID_PUBLIC_KEY=...
+VAPID_PRIVATE_KEY=...
+VAPID_SUBJECT=mailto:you@example.com
+```
+
+On iPhone, Web Push requires iOS 16.4 or newer and the PWA must first be added
+to the Home Screen. The permission prompt is shown only after the user enables
+push from **Settings → Push notifications**.
+
+---
+
 ## 📋 API Endpoints
 
 | Method | Endpoint | Description |
@@ -126,6 +150,10 @@ curl -X POST https://YOUR-SERVER-URL/api/telegram/setup-webhook \
 | `PATCH` | `/api/reminders/:id/complete` | Mark as completed |
 | `PATCH` | `/api/reminders/:id/snooze` | Snooze by N minutes |
 | `DELETE` | `/api/reminders/:id` | Hard delete |
+| `GET` | `/api/push/vapid-public-key` | Public VAPID key |
+| `POST` | `/api/push/subscriptions` | Register/update this device |
+| `DELETE` | `/api/push/subscriptions` | Disable this device |
+| `POST` | `/api/push/test` | Send a test notification |
 | `GET` | `/api/health` | Health check |
 
 ### Create reminder payload example:

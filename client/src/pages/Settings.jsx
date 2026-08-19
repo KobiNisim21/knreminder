@@ -6,6 +6,7 @@ import {
   repeatPeriodLabel,
   snoozePresetLabel,
 } from '../context/SettingsContext';
+import { usePushNotifications } from '../hooks/usePushNotifications';
 // Options a snooze slot can be set to: relative durations + common clock times.
 const SNOOZE_CHOICES = [
   { value: '15min', label: '15 דקות' },
@@ -22,6 +23,7 @@ import {
   Section,
   Row,
   PickerSheet,
+  Toggle,
 } from '../components/settings/SettingsPrimitives';
 
 // Choices for "number of repeats".
@@ -40,9 +42,11 @@ const REPEAT_COUNTS = [1, 2, 3, 5, 10].map((n) => ({ value: n, label: String(n) 
  */
 export default function Settings() {
   const navigate = useNavigate();
-  const { settings, updateRepeat, setSnoozePresets } = useSettings();
+  const { settings, updateRepeat, updateNotifications, setSnoozePresets } = useSettings();
+  const push = usePushNotifications();
   const [picker, setPicker] = useState(null);       // 'count' | 'period' | null
   const [snoozeIdx, setSnoozeIdx] = useState(null); // index of snooze slot being edited
+  const [testStatus, setTestStatus] = useState(null);
 
   function changeSnoozeSlot(value) {
     const next = [...settings.snoozePresets];
@@ -50,8 +54,71 @@ export default function Settings() {
     setSnoozePresets(next);
   }
 
+  async function togglePush(enabled) {
+    setTestStatus(null);
+    try {
+      if (enabled) await push.enable();
+      else await push.disable();
+    } catch {
+      // The hook exposes a localized error directly below the section.
+    }
+  }
+
+  async function sendTest() {
+    setTestStatus('שולח…');
+    try {
+      await push.sendTest();
+      setTestStatus('נשלחה התראת בדיקה');
+    } catch (error) {
+      setTestStatus(error.message || 'שליחת הבדיקה נכשלה');
+    }
+  }
+
   return (
     <SettingsPage title="הגדרות" backTo="/more">
+      {/* ── Web Push notifications ─────────────────────────────────────────── */}
+      <Section
+        caption="התראות פוש"
+        footer={
+          push.error ||
+          (!push.supported && !push.loading
+            ? 'הדפדפן הזה אינו תומך בפוש. ב-iPhone יש להתקין את האפליקציה במסך הבית.'
+            : 'ימי הולדת נשלחים לפי ההגדרות במסך ימי הולדת. חגים נשלחים יום לפני וזמני שבת ביום שישי, בשעה 10:00.')
+        }
+      >
+        <Row first label="התראות במכשיר">
+          <Toggle
+            label="התראות במכשיר"
+            checked={push.subscribed && settings.notifications.enabled}
+            disabled={push.loading || (!push.supported && !push.loading)}
+            onChange={togglePush}
+          />
+        </Row>
+        <Row label="תזכורות חשובות">
+          <Toggle label="תזכורות חשובות" checked={settings.notifications.importantReminders}
+            disabled={!push.subscribed}
+            onChange={(value) => updateNotifications({ importantReminders: value })} />
+        </Row>
+        <Row label="ימי הולדת">
+          <Toggle label="ימי הולדת" checked={settings.notifications.birthdays}
+            disabled={!push.subscribed}
+            onChange={(value) => updateNotifications({ birthdays: value })} />
+        </Row>
+        <Row label="חגים קרובים">
+          <Toggle label="חגים קרובים" checked={settings.notifications.holidays}
+            disabled={!push.subscribed}
+            onChange={(value) => updateNotifications({ holidays: value })} />
+        </Row>
+        <Row label="כניסת ויציאת שבת">
+          <Toggle label="כניסת ויציאת שבת" checked={settings.notifications.shabbat}
+            disabled={!push.subscribed}
+            onChange={(value) => updateNotifications({ shabbat: value })} />
+        </Row>
+        {push.subscribed && (
+          <Row label="שלח התראת בדיקה" onClick={sendTest} value={testStatus} hideChevron />
+        )}
+      </Section>
+
       {/* ── Repeating notifications ─────────────────────────────────────────── */}
       <Section caption="התראות חוזרות">
         <Row

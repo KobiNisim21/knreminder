@@ -18,6 +18,9 @@ import { createContext, useContext, useEffect, useState, useCallback } from 'rea
  *     reminderTime: string   // "HH:MM" default delivery time
  *     inAdvance:    string   // one of IN_ADVANCE_OPTIONS values
  *   }
+ *   notifications: {
+ *     enabled, importantReminders, birthdays, holidays, shabbat: boolean
+ *   }
  */
 
 const STORAGE_KEY = 'knr.settings.v1';
@@ -63,6 +66,13 @@ export const DEFAULT_SETTINGS = {
     reminderTime: '10:00',
     inAdvance: '3',
   },
+  notifications: {
+    enabled: false,
+    importantReminders: true,
+    birthdays: true,
+    holidays: false,
+    shabbat: false,
+  },
 };
 
 // ─── Context ─────────────────────────────────────────────────────────────────
@@ -80,6 +90,10 @@ function loadSettings() {
       ...parsed,
       repeat: { ...DEFAULT_SETTINGS.repeat, ...(parsed.repeat || {}) },
       birthdays: { ...DEFAULT_SETTINGS.birthdays, ...(parsed.birthdays || {}) },
+      notifications: {
+        ...DEFAULT_SETTINGS.notifications,
+        ...(parsed.notifications || {}),
+      },
       snoozePresets: Array.isArray(parsed.snoozePresets)
         ? parsed.snoozePresets
         : DEFAULT_SETTINGS.snoozePresets,
@@ -122,6 +136,11 @@ export function SettingsProvider({ children }) {
     [updateSection]
   );
 
+  const updateNotifications = useCallback(
+    (patch) => updateSection('notifications', patch),
+    [updateSection]
+  );
+
   const setSnoozePresets = useCallback(
     (presets) => setSettings((prev) => ({ ...prev, snoozePresets: presets })),
     []
@@ -134,6 +153,7 @@ export function SettingsProvider({ children }) {
     updateSection,
     updateRepeat,
     updateBirthdays,
+    updateNotifications,
     setSnoozePresets,
     resetSettings,
   };

@@ -159,4 +159,15 @@ export const authApi = {
   getDeepLinkStatus: (sessionId) => api.get(`/auth/deeplink/status/${sessionId}`),
 };
 
+// ─── Web Push API ───────────────────────────────────────────────────────────
+
+export const pushApi = {
+  getPublicKey: () => api.get('/push/vapid-public-key'),
+  subscribe: (subscription, preferences) =>
+    api.post('/push/subscriptions', { subscription, preferences }),
+  unsubscribe: (endpoint) =>
+    api.delete('/push/subscriptions', { data: { endpoint } }),
+  sendTest: (endpoint) => api.post('/push/test', { endpoint }),
+};
+
 export default api;

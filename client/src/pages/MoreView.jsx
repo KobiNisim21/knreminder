@@ -21,9 +21,9 @@ export default function MoreView() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
 
-  function handleLogout() {
+  async function handleLogout() {
     if (window.confirm('להתנתק מהחשבון? נתונים מקומיים יימחקו מהמכשיר.')) {
-      logout(); // purges LocalStorage + clears React Query cache → App shows Login
+      await logout(); // also removes this device's push subscription
     }
   }
 

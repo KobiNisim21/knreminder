@@ -49,15 +49,25 @@ function defineJobs(ag) {
       return;
     }
 
-    // Send the Telegram notification
+    // Deliver Telegram and Web Push independently so one provider cannot
+    // suppress a healthy second notification channel.
+    let telegramError = null;
     try {
       await sendReminderNotification(reminder);
       console.log(`[Agenda] ✅ Notification sent for: "${reminder.text}"`);
     } catch (err) {
       console.error(`[Agenda] ❌ Telegram send failed for ${reminderId}:`, err.message);
-      // Re-throw so Agenda marks the job as failed and can retry
-      throw err;
+      telegramError = err;
     }
+
+    const { sendReminderPush } = require('./pushService');
+    const pushResult = await sendReminderPush(reminder);
+    if (pushResult.sent > 0) {
+      console.log(`[Agenda] Web Push sent to ${pushResult.sent} device(s)`);
+    }
+
+    // Preserve Telegram retries when no push device received the occurrence.
+    if (telegramError && pushResult.sent === 0) throw telegramError;
 
     if (reminder.isRecurring && reminder.recurrence) {
       // Advance to the next occurrence
@@ -73,6 +83,14 @@ function defineJobs(ag) {
       // One-time reminder — mark as notified
       reminder.notified = true;
       await reminder.save();
+    }
+  });
+
+  ag.define('dispatch calendar push notifications', { concurrency: 1 }, async () => {
+    const { dispatchCalendarNotifications } = require('./pushService');
+    const result = await dispatchCalendarNotifications();
+    if (result.sent > 0) {
+      console.log(`[Agenda] Sent ${result.sent} calendar push notification(s)`);
     }
   });
 }
@@ -132,6 +150,7 @@ async function startAgenda() {
   const ag = getAgenda();
   defineJobs(ag);
   await ag.start();
+  await ag.every('15 minutes', 'dispatch calendar push notifications');
 
   ag.on('ready', () => console.log('[Agenda] ✅ Scheduler ready'));
   ag.on('error', (err) => console.error('[Agenda] ❌ Scheduler error:', err));

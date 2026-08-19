@@ -10,7 +10,7 @@
  * Cache names are versioned — bump CACHE_VERSION to force a full cache refresh on deploy.
  */
 
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const STATIC_CACHE  = `kn-reminder-static-${CACHE_VERSION}`;
 const API_CACHE     = `kn-reminder-api-${CACHE_VERSION}`;
 const ALL_CACHES    = [STATIC_CACHE, API_CACHE];
@@ -165,7 +165,12 @@ async function networkFirst(request, cacheName, timeoutMs = 5000) {
 // This handler is scaffolded for future native push support.
 self.addEventListener('push', (event) => {
   if (!event.data) return;
-  const data = event.data.json();
+  let data;
+  try {
+    data = event.data.json();
+  } catch {
+    data = { body: event.data.text() };
+  }
   event.waitUntil(
     self.registration.showNotification(data.title || '🔔 תזכורת', {
       body: data.body || '',
@@ -174,6 +179,9 @@ self.addEventListener('push', (event) => {
       dir: 'rtl',
       lang: 'he',
       vibrate: [200, 100, 200],
+      tag: data.tag,
+      renotify: Boolean(data.tag),
+      timestamp: Date.now(),
       data: { url: data.url || '/' },
     })
   );
@@ -181,8 +189,18 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = event.notification.data?.url || '/';
-  event.waitUntil(clients.openWindow(url));
+  const targetUrl = new URL(event.notification.data?.url || '/', self.location.origin).href;
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (windowClients) => {
+      for (const client of windowClients) {
+        if (new URL(client.url).origin === self.location.origin) {
+          await client.navigate(targetUrl);
+          return client.focus();
+        }
+      }
+      return clients.openWindow(targetUrl);
+    })
+  );
 });
 
 // ─── Background Sync ──────────────────────────────────────────────────────────
