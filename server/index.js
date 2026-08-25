@@ -10,6 +10,7 @@ const remindersRouter = require('./routes/reminders');
 const telegramRouter  = require('./routes/telegram');
 const authRouter      = require('./routes/auth');
 const pushRouter      = require('./routes/push');
+const settingsRouter  = require('./routes/settings');
 const errorHandler    = require('./middleware/errorHandler');
 const { startAgenda, stopAgenda } = require('./services/agendaService');
 const { startPolling, stopPolling, deleteWebhook } = require('./services/telegramService');
@@ -62,6 +63,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/reminders', remindersRouter);
 app.use('/api/telegram', telegramRouter);
 app.use('/api/push', pushRouter);
+app.use('/api/settings', settingsRouter);
 
 // Health check endpoint (used by Railway/Render for uptime monitoring)
 app.get('/api/health', (req, res) => {

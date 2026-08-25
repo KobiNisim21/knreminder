@@ -6,6 +6,7 @@ A personal reminder PWA inspired by **BZ Reminder** — built with the MERN stac
 - **Backend**: Node.js + Express + Mongoose + Agenda.js
 - **Database**: MongoDB Atlas (with 90-day TTL auto-cleanup)
 - **Notifications**: Telegram Bot + Web Push for installed mobile PWAs
+- **Automatic backup**: optional weekly `backup.knr` delivery through Telegram
 
 ---
 
@@ -159,6 +160,9 @@ push from **Settings → Push notifications**.
 | `POST` | `/api/push/subscriptions` | Register/update this device |
 | `DELETE` | `/api/push/subscriptions` | Disable this device |
 | `POST` | `/api/push/test` | Send a test notification |
+| `GET` | `/api/settings/weekly-backup` | Weekly Telegram backup status |
+| `PATCH` | `/api/settings/weekly-backup` | Enable or disable weekly backup |
+| `POST` | `/api/settings/weekly-backup/send-now` | Send a backup immediately |
 | `GET` | `/api/health` | Health check |
 
 ### Create reminder payload example:

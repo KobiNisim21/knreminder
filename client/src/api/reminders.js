@@ -170,4 +170,12 @@ export const pushApi = {
   sendTest: (endpoint) => api.post('/push/test', { endpoint }),
 };
 
+// ─── Server-backed user settings API ───────────────────────────────────────
+
+export const settingsApi = {
+  getWeeklyBackup: () => api.get('/settings/weekly-backup'),
+  updateWeeklyBackup: (enabled) => api.patch('/settings/weekly-backup', { enabled }),
+  sendWeeklyBackupNow: () => api.post('/settings/weekly-backup/send-now'),
+};
+
 export default api;

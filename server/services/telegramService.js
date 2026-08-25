@@ -40,6 +40,29 @@ async function sendMessage(chatId, text, extra = {}) {
   return response.data;
 }
 
+/** Send the exact `.knr` JSON backup used by the in-app manual export. */
+async function sendBackupDocument(chatId, backup) {
+  if (!chatId || !process.env.TELEGRAM_BOT_TOKEN) {
+    throw new Error('Telegram bot token or chatId is not configured');
+  }
+
+  const { serializeBackup } = require('./backupService');
+  const form = new FormData();
+  form.append('chat_id', String(chatId));
+  form.append(
+    'document',
+    new Blob([serializeBackup(backup)], { type: 'application/json' }),
+    'backup.knr'
+  );
+  form.append(
+    'caption',
+    `🗄️ גיבוי שבועי של KN Reminder\n${backup.count} פריטים · ${formatHebrewDate(backup.exportedAt)}`
+  );
+
+  const response = await axios.post(`${apiBase()}/sendDocument`, form);
+  return response.data;
+}
+
 /** Dismiss the "loading" spinner on an inline button after the user taps it. */
 async function answerCallbackQuery(callbackQueryId, text = '', showAlert = false) {
   await axios.post(`${apiBase()}/answerCallbackQuery`, {
@@ -412,6 +435,7 @@ function sleep(ms) {
 module.exports = {
   // Core
   sendMessage,
+  sendBackupDocument,
   answerCallbackQuery,
   clearInlineKeyboard,
   verifyBotToken,

@@ -1,5 +1,6 @@
 const Agenda = require('agenda');
 const Reminder = require('../models/Reminder');
+const UserPreference = require('../models/UserPreference');
 // NOTE: telegramService is required lazily inside the job handler to avoid
 // the circular dependency (telegramService → agendaService → telegramService).
 // Node.js handles this correctly when the require is deferred to call-time.
@@ -93,6 +94,22 @@ function defineJobs(ag) {
       console.log(`[Agenda] Sent ${result.sent} calendar push notification(s)`);
     }
   });
+
+  ag.define('send weekly backup', { priority: 'normal', concurrency: 1 }, async (job) => {
+    const chatId = String(job.attrs.data?.chatId || '');
+    const preference = await UserPreference.findOne({
+      chatId,
+      'weeklyBackup.enabled': true,
+    }).lean();
+    if (!preference) {
+      console.log(`[Agenda] Skipping disabled weekly backup for ${chatId}`);
+      return;
+    }
+
+    const { sendWeeklyBackup } = require('./weeklyBackupService');
+    const { backup } = await sendWeeklyBackup(chatId);
+    console.log(`[Agenda] Weekly backup sent to ${chatId} (${backup.count} items)`);
+  });
 }
 
 // ─── Public scheduling API ────────────────────────────────────────────────────
@@ -140,6 +157,26 @@ async function cancelReminderJob(reminderId) {
   console.log(`[Agenda] Cancelled ${count} job(s) for reminder ${reminderId}`);
 }
 
+async function scheduleWeeklyBackup(chatId) {
+  const ag = getAgenda();
+  const normalizedChatId = String(chatId);
+  await ag.cancel({ name: 'send weekly backup', 'data.chatId': normalizedChatId });
+
+  const job = ag.create('send weekly backup', { chatId: normalizedChatId });
+  job.unique({ name: 'send weekly backup', 'data.chatId': normalizedChatId });
+  job.repeatEvery('0 10 * * 4', {
+    timezone: 'Asia/Jerusalem',
+    skipImmediate: true,
+  });
+  await job.save();
+  return job;
+}
+
+async function cancelWeeklyBackup(chatId) {
+  const ag = getAgenda();
+  return ag.cancel({ name: 'send weekly backup', 'data.chatId': String(chatId) });
+}
+
 // ─── Startup & shutdown ───────────────────────────────────────────────────────
 
 /**
@@ -151,6 +188,12 @@ async function startAgenda() {
   defineJobs(ag);
   await ag.start();
   await ag.every('15 minutes', 'dispatch calendar push notifications');
+
+  // Reconcile recurring jobs from user preferences after every deploy/restart.
+  const weeklyBackupUsers = await UserPreference.find({
+    'weeklyBackup.enabled': true,
+  }).select('chatId').lean();
+  await Promise.all(weeklyBackupUsers.map(({ chatId }) => scheduleWeeklyBackup(chatId)));
 
   ag.on('ready', () => console.log('[Agenda] ✅ Scheduler ready'));
   ag.on('error', (err) => console.error('[Agenda] ❌ Scheduler error:', err));
@@ -204,5 +247,7 @@ module.exports = {
   stopAgenda,
   scheduleReminder,
   cancelReminderJob,
+  scheduleWeeklyBackup,
+  cancelWeeklyBackup,
   getNextOccurrence,
 };

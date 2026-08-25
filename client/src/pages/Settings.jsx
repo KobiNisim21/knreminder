@@ -7,6 +7,7 @@ import {
   snoozePresetLabel,
 } from '../context/SettingsContext';
 import { usePushNotifications } from '../hooks/usePushNotifications';
+import { useWeeklyBackup } from '../hooks/useWeeklyBackup';
 // Options a snooze slot can be set to: relative durations + common clock times.
 const SNOOZE_CHOICES = [
   { value: '15min', label: '15 דקות' },
@@ -44,9 +45,11 @@ export default function Settings() {
   const navigate = useNavigate();
   const { settings, updateRepeat, updateNotifications, setSnoozePresets } = useSettings();
   const push = usePushNotifications();
+  const weeklyBackup = useWeeklyBackup();
   const [picker, setPicker] = useState(null);       // 'count' | 'period' | null
   const [snoozeIdx, setSnoozeIdx] = useState(null); // index of snooze slot being edited
   const [testStatus, setTestStatus] = useState(null);
+  const [backupStatus, setBackupStatus] = useState(null);
 
   function changeSnoozeSlot(value) {
     const next = [...settings.snoozePresets];
@@ -71,6 +74,25 @@ export default function Settings() {
       setTestStatus('נשלחה התראת בדיקה');
     } catch (error) {
       setTestStatus(error.message || 'שליחת הבדיקה נכשלה');
+    }
+  }
+
+  async function toggleWeeklyBackup(enabled) {
+    setBackupStatus(null);
+    try {
+      await weeklyBackup.setEnabled(enabled);
+    } catch {
+      // The hook exposes the server error in the section footer.
+    }
+  }
+
+  async function sendBackupNow() {
+    setBackupStatus('שולח…');
+    try {
+      const result = await weeklyBackup.sendNow();
+      setBackupStatus(`נשלח קובץ עם ${result.count} פריטים`);
+    } catch (error) {
+      setBackupStatus(error.message || 'שליחת הגיבוי נכשלה');
     }
   }
 
@@ -122,6 +144,33 @@ export default function Settings() {
         </Row>
         {push.subscribed && (
           <Row label="שלח התראת בדיקה" onClick={sendTest} value={testStatus} hideChevron />
+        )}
+      </Section>
+
+      {/* ── Weekly Telegram backup ─────────────────────────────────────────── */}
+      <Section
+        caption="גיבוי אוטומטי"
+        footer={
+          weeklyBackup.error
+            ? <span role="alert" className="font-medium text-red-600">{weeklyBackup.error}</span>
+            : 'קובץ backup.knr זהה לגיבוי הידני יישלח מהבוט בכל יום חמישי בשעה 10:00.'
+        }
+      >
+        <Row first label="גיבוי שבועי בטלגרם">
+          <Toggle
+            label="גיבוי שבועי בטלגרם"
+            checked={weeklyBackup.enabled}
+            disabled={weeklyBackup.loading}
+            onChange={toggleWeeklyBackup}
+          />
+        </Row>
+        {weeklyBackup.enabled && (
+          <Row
+            label={weeklyBackup.loading ? 'שולח גיבוי…' : 'שלח גיבוי עכשיו'}
+            onClick={weeklyBackup.loading ? undefined : sendBackupNow}
+            value={backupStatus}
+            hideChevron
+          />
         )}
       </Section>
 

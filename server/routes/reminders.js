@@ -6,6 +6,7 @@ const Reminder = require('../models/Reminder');
 const { scheduleReminder, cancelReminderJob } = require('../services/agendaService');
 const asyncHandler = require('../middleware/asyncHandler');
 const resolveUser = require('../middleware/resolveUser');
+const { createBackup } = require('../services/backupService');
 
 // Every reminder route is per-user. resolveUser sets req.chatId (or 401s), and
 // all queries below scope by it so users can only ever touch their own data.
@@ -65,18 +66,9 @@ router.get(
 router.get(
   '/export',
   asyncHandler(async (req, res) => {
-    const items = await Reminder.find({ chatId: req.chatId })
-      .sort({ reminderAt: 1 })
-      .lean();
     res.json({
       success: true,
-      backup: {
-        format: 'knr-backup',
-        version: 1,
-        exportedAt: new Date().toISOString(),
-        count: items.length,
-        items,
-      },
+      backup: await createBackup(req.chatId),
     });
   })
 );
