@@ -78,23 +78,32 @@ export default function ReminderItem({
     setIsSwiping(false);
 
     if (dx >= ACTION_THRESHOLD) {
-      // Swiped right past threshold → Snooze, fire instantly.
-      animateAndReset(() =>
-        snoozeMutation.mutate({ id: reminder._id, minutes: SWIPE_SNOOZE_MINUTES })
-      );
+      // Swiped right past threshold -> Snooze, ask for confirmation.
+      requestConfirmation('snooze');
     } else if (dx <= -ACTION_THRESHOLD) {
-      // Swiped left past threshold → Complete, fire instantly.
-      animateAndReset(() => completeMutation.mutate(reminder._id));
+      // Swiped left past threshold -> Complete, ask for confirmation.
+      requestConfirmation('complete');
     } else {
       // Not far enough → snap back.
       setSwipeX(0);
     }
   }
 
-  function animateAndReset(fireMutation) {
-    fireMutation();
-    // Snap the row closed; the list will refetch and drop/update it.
+  function requestConfirmation(action) {
     setSwipeX(0);
+
+    window.setTimeout(() => {
+      const prompt = action === 'snooze'
+        ? '\u05DC\u05D3\u05D7\u05D5\u05EA \u05D0\u05EA \u05D4\u05EA\u05D6\u05DB\u05D5\u05E8\u05EA \u05D1\u05E9\u05E2\u05D4?'
+        : '\u05DC\u05D4\u05E9\u05DC\u05D9\u05DD \u05D0\u05EA \u05D4\u05EA\u05D6\u05DB\u05D5\u05E8\u05EA?';
+      if (!window.confirm(`${prompt}\n\n${reminder.text}`)) return;
+
+      if (action === 'snooze') {
+        snoozeMutation.mutate({ id: reminder._id, minutes: SWIPE_SNOOZE_MINUTES });
+      } else {
+        completeMutation.mutate(reminder._id);
+      }
+    }, 0);
   }
 
   // ── Display data ─────────────────────────────────────────────────────────────
