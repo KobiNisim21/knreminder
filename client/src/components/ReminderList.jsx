@@ -17,6 +17,7 @@ export default function ReminderList({
   onQuickAdd,
   checkedIds,
   onToggleCheck,
+  todaySectionRef,
 }) {
   const groups = groupRemindersByDay(reminders);
 
@@ -24,10 +25,26 @@ export default function ReminderList({
     return <EmptyState />;
   }
 
+  const displayGroups = [...groups];
+  if (!displayGroups.some((group) => group.key === '__today__')) {
+    const firstFutureIndex = displayGroups.findIndex((group) => !group.isPast);
+    const insertAt = firstFutureIndex === -1 ? displayGroups.length : firstFutureIndex;
+    displayGroups.splice(insertAt, 0, {
+      key: '__today__',
+      label: '\u05D4\u05D9\u05D5\u05DD',
+      reminders: [],
+      isPast: false,
+    });
+  }
+
   return (
     <div className="flex-1">
-      {groups.map((group) => (
-        <section key={group.key}>
+      {displayGroups.map((group) => (
+        <section
+          key={group.key}
+          ref={group.key === '__today__' ? todaySectionRef : undefined}
+          className={group.key === '__today__' ? 'scroll-mt-1' : undefined}
+        >
           {/* ── Sticky section header ─────────────────────────────────────── */}
           <div className="section-header">
             <span className={group.isPast ? 'text-accent' : 'text-primary'}>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useReminders } from '../hooks/useReminders';
 import { useReminderMutations } from '../hooks/useReminderMutations';
 import ReminderList from '../components/ReminderList';
@@ -26,6 +26,7 @@ export default function Dashboard() {
   const [selectedReminder, setSelectedReminder] = useState(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const todaySectionRef = useRef(null);
   // The set of checked reminder ids for bulk selection.
   const [checkedIds, setCheckedIds] = useState([]);
 
@@ -39,6 +40,15 @@ export default function Dashboard() {
   function closeSearch() {
     setSearchOpen(false);
     setQuery('');
+  }
+
+  function goToToday() {
+    closeSearch();
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        todaySectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
   }
 
   function openModal(date = null) {
@@ -97,6 +107,8 @@ export default function Dashboard() {
                 <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
               </svg>
             </button>
+
+            <TodayButton onClick={goToToday} />
 
             <button
               onClick={() => setSearchOpen((v) => !v)}
@@ -191,6 +203,7 @@ export default function Dashboard() {
         {!isLoading && !isError && (
           <ReminderList
             reminders={visibleReminders}
+            todaySectionRef={todaySectionRef}
             selectedId={selectedReminder?._id ?? null}
             onSelect={toggleSelect}
             checkedIds={checkedIds}
@@ -256,6 +269,11 @@ export default function Dashboard() {
 }
 
 // ─── Loading skeleton ─────────────────────────────────────────────────────────
+
+function TodayButton({ onClick }) {
+  const label = '\u05D4\u05D9\u05D5\u05DD';
+  return <button onClick={onClick} className={'text-primary bg-primary/10 px-2.5 py-1.5 rounded-full text-xs font-semibold'} aria-label={label} title={label}>{label}</button>;
+}
 
 function LoadingSkeleton() {
   return (

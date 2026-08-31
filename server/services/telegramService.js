@@ -25,7 +25,7 @@ const RECURRENCE_LABELS = {
 
 /** Returns the Telegram Bot API base URL. Built lazily so .env is loaded first. */
 const apiBase = () =>
-  `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}`;
+  `https://api.telegram.org/bot${String(process.env.TELEGRAM_BOT_TOKEN || '').trim()}`;
 
 // ─── Core API helpers ─────────────────────────────────────────────────────────
 
@@ -59,8 +59,17 @@ async function sendBackupDocument(chatId, backup) {
     `🗄️ גיבוי שבועי של KN Reminder\n${backup.count} פריטים · ${formatHebrewDate(backup.exportedAt)}`
   );
 
-  const response = await axios.post(`${apiBase()}/sendDocument`, form);
-  return response.data;
+  try {
+    const response = await axios.post(`${apiBase()}/sendDocument`, form);
+    return response.data;
+  } catch (error) {
+    const status = error.response?.status;
+    const description = error.response?.data?.description;
+    const details = [status, description].filter(Boolean).join(' - ');
+    throw new Error(
+      `Telegram sendDocument failed${details ? ` (${details})` : ''}: ${error.message}`
+    );
+  }
 }
 
 /** Dismiss the "loading" spinner on an inline button after the user taps it. */

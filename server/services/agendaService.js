@@ -96,6 +96,18 @@ function defineJobs(ag) {
   });
 
   ag.define('send weekly backup', { priority: 'normal', concurrency: 1 }, async (job) => {
+    if (job.attrs.data?.dispatch) {
+      const { sendDueWeeklyBackups } = require('./weeklyBackupService');
+      const results = await sendDueWeeklyBackups();
+      const sent = results.filter((result) => result.sent);
+      if (sent.length > 0) {
+        console.log(`[Agenda] Sent ${sent.length} due weekly backup(s)`);
+      }
+      const failed = results.find((result) => !result.sent);
+      if (failed) throw new Error(failed.error);
+      return;
+    }
+
     const chatId = String(job.attrs.data?.chatId || '');
     const preference = await UserPreference.findOne({
       chatId,
@@ -188,12 +200,17 @@ async function startAgenda() {
   defineJobs(ag);
   await ag.start();
   await ag.every('15 minutes', 'dispatch calendar push notifications');
+  await ag.every('15 minutes', 'send weekly backup', { dispatch: true });
 
   // Reconcile recurring jobs from user preferences after every deploy/restart.
   const weeklyBackupUsers = await UserPreference.find({
     'weeklyBackup.enabled': true,
   }).select('chatId').lean();
   await Promise.all(weeklyBackupUsers.map(({ chatId }) => scheduleWeeklyBackup(chatId)));
+
+  // Run a guarded catch-up immediately after every deployment/restart. The due
+  // check prevents duplicates and recovers a Thursday delivery that failed.
+  await ag.now('send weekly backup', { dispatch: true });
 
   ag.on('ready', () => console.log('[Agenda] ✅ Scheduler ready'));
   ag.on('error', (err) => console.error('[Agenda] ❌ Scheduler error:', err));
