@@ -7,10 +7,12 @@
  *   • API calls (/api/*)                    → Network-First (fallback to cache)
  *   • Navigation requests (HTML)            → Network-First (offline fallback: /index.html)
  *
- * Cache names are versioned — bump CACHE_VERSION to force a full cache refresh on deploy.
+ * Cache names are versioned for schema changes. Successful online navigations
+ * continuously refresh the cached app shell, so regular deploys also update
+ * the offline version without a manual version bump.
  */
 
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4';
 const STATIC_CACHE  = `kn-reminder-static-${CACHE_VERSION}`;
 const API_CACHE     = `kn-reminder-api-${CACHE_VERSION}`;
 const ALL_CACHES    = [STATIC_CACHE, API_CACHE];
@@ -80,13 +82,7 @@ self.addEventListener('fetch', (event) => {
 
   // ── Navigation (HTML) requests: Network-First, offline → /index.html ────
   if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request)
-        .catch(async () => {
-          const cache = await caches.open(STATIC_CACHE);
-          return cache.match('/index.html');
-        })
-    );
+    event.respondWith(navigationNetworkFirst(request));
     return;
   }
 
@@ -95,6 +91,24 @@ self.addEventListener('fetch', (event) => {
 });
 
 // ─── Strategies ───────────────────────────────────────────────────────────────
+
+/**
+ * Fetch the latest SPA shell and persist it under a canonical cache key.
+ * Every successful online app launch therefore becomes the next offline shell.
+ */
+async function navigationNetworkFirst(request) {
+  try {
+    const networkResponse = await fetch(request);
+    if (networkResponse.ok) {
+      const cache = await caches.open(STATIC_CACHE);
+      await cache.put('/index.html', networkResponse.clone());
+    }
+    return networkResponse;
+  } catch {
+    const cache = await caches.open(STATIC_CACHE);
+    return cache.match('/index.html');
+  }
+}
 
 /**
  * Cache-First: Serve from cache, fall back to network and then store in cache.
