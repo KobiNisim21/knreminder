@@ -43,13 +43,14 @@ export default function CalendarView() {
   const [addModalDate, setAddModalDate] = useState(null);
   const [editingReminder, setEditingReminder] = useState(null);
   const [selectedReminder, setSelectedReminder] = useState(null);
+  const [selectionMode, setSelectionMode] = useState(false);
   const [checkedIds, setCheckedIds] = useState([]);
 
   const { remindersByDate, isLoading, isError, error, refetch } = useCalendarData();
   const { completeMutation, snoozeMutation, deleteMutation, bulkMutation } = useReminderMutations();
 
   function toggleSelect(reminder) {
-    if (checkedIds.length > 0) {
+    if (selectionMode) {
       toggleChecked(reminder._id);
       return;
     }
@@ -58,6 +59,12 @@ export default function CalendarView() {
 
   function exitSelectMode() {
     setCheckedIds([]);
+    setSelectionMode(false);
+  }
+
+  function enterSelectMode() {
+    setSelectedReminder(null);
+    setSelectionMode(true);
   }
 
   function toggleChecked(id) {
@@ -87,6 +94,7 @@ export default function CalendarView() {
   }, [remindersByDate, year, month]);
 
   function handleMonthChange(newYear, newMonth) {
+    exitSelectMode();
     setYear(newYear);
     setMonth(newMonth);
     // Keep selected date if it's in the new month; else jump to 1st
@@ -99,6 +107,7 @@ export default function CalendarView() {
   }
 
   function handleDaySelect(date) {
+    exitSelectMode();
     setSelectedDate(date);
   }
 
@@ -122,8 +131,21 @@ export default function CalendarView() {
       {/* ── Page Header ─────────────────────────────────────────────────────── */}
       <header className="bg-surface border-b border-divider px-4 sticky top-0 z-20 pt-safe">
         <div className="flex items-center justify-between h-14">
-          <div className="w-8" />
-          <h1 className="text-lg font-semibold text-textPrimary">לוח שנה</h1>
+          <button
+            onClick={selectionMode ? exitSelectMode : enterSelectMode}
+            className={`p-1 rounded-full transition-colors
+                        ${selectionMode ? 'text-primary bg-primary/10' : 'text-textSecondary'}`}
+            aria-label={selectionMode ? 'בטל בחירה מרובה' : 'בחירה מרובה'}
+            aria-pressed={selectionMode}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 6h11M9 12h11M9 18h11" />
+              <path d="m3 6 1 1 2-2M3 12l1 1 2-2M3 18l1 1 2-2" />
+            </svg>
+          </button>
+          <h1 className="text-lg font-semibold text-textPrimary">
+            {selectionMode ? 'בחר תזכורות' : 'לוח שנה'}
+          </h1>
           {/* Month summary chip */}
           {monthReminderCount > 0 && (
             <div className="bg-primary/10 text-primary text-xs font-medium px-2.5 py-1 rounded-full">
@@ -207,6 +229,7 @@ export default function CalendarView() {
                   reminder={reminder}
                   isSelected={selectedReminder?._id === reminder._id}
                   onSelect={toggleSelect}
+                  selectionMode={selectionMode}
                   isChecked={checkedIds.includes(reminder._id)}
                   onToggleCheck={toggleChecked}
                 />
@@ -244,7 +267,7 @@ export default function CalendarView() {
       </main>
 
       {/* ── Contextual action bar (single-item; hidden when any item is checked) ──── */}
-      {checkedIds.length === 0 && (
+      {!selectionMode && (
         <ActionBar
           reminder={selectedReminder}
           onClose={() => setSelectedReminder(null)}
@@ -256,7 +279,7 @@ export default function CalendarView() {
       )}
 
       {/* ── Bulk action bar (shown when items are checked) ──────────────────── */}
-      {checkedIds.length > 0 && (
+      {selectionMode && (
         <BulkActionBar
           count={checkedIds.length}
           busy={bulkMutation.isPending}
@@ -285,7 +308,7 @@ export default function CalendarView() {
       {/* ── Bottom navigation ────────────────────────────────────────────────── */}
       <BottomNav
         onAddPress={() => openAddForDay(selectedDate ?? today)}
-        anyModalOpen={addModalOpen || !!editingReminder || !!selectedReminder || checkedIds.length > 0}
+        anyModalOpen={addModalOpen || !!editingReminder || !!selectedReminder || selectionMode}
       />
 
     </div>

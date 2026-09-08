@@ -6,8 +6,34 @@ import {
   saveReminders,
   loadBirthdays,
   saveBirthdays,
+  loadCompleted,
+  saveCompleted,
 } from '../utils/offlineStore';
 import { queueEventTarget } from '../utils/offlineQueue';
+
+function nextOfflineOccurrence(value, frequency) {
+  const next = new Date(value);
+  if (frequency === 'daily') next.setDate(next.getDate() + 1);
+  else if (frequency === 'weekly') next.setDate(next.getDate() + 7);
+  else if (frequency === 'monthly') next.setMonth(next.getMonth() + 1);
+  else if (frequency === 'yearly') next.setFullYear(next.getFullYear() + 1);
+  return next;
+}
+
+function restoredReminderAt(reminder) {
+  const now = new Date();
+  let restoredAt = new Date(reminder.reminderAt);
+  if (Number.isNaN(restoredAt.getTime())) return new Date(now.getTime() + 5 * 60 * 1000);
+  if (restoredAt > now) return restoredAt;
+  const frequency = reminder.recurrence?.frequency;
+  if (!reminder.isRecurring || !['daily', 'weekly', 'monthly', 'yearly'].includes(frequency)) {
+    return new Date(now.getTime() + 5 * 60 * 1000);
+  }
+  do {
+    restoredAt = nextOfflineOccurrence(restoredAt, frequency);
+  } while (restoredAt <= now);
+  return restoredAt;
+}
 
 /**
  * useReminderMutations — Centralised mutations hook.
@@ -67,12 +93,15 @@ export function useReminderMutations() {
     try {
       const cachedReminders = queryClient.getQueryData(['reminders']);
       const cachedBirthdays = queryClient.getQueryData(['reminders', 'birthdays']);
-      const [current, birthdays] = await Promise.all([
+      const cachedCompleted = queryClient.getQueryData(['reminders', 'completed']);
+      const [current, birthdays, completed] = await Promise.all([
         cachedReminders || loadReminders(),
         cachedBirthdays || loadBirthdays(),
+        cachedCompleted || loadCompleted(),
       ]);
       let next = [...current];
       let nextBirthdays = [...birthdays];
+      let nextCompleted = [...completed];
       
       if (type === 'create') {
         const optimisticItem = {
@@ -98,14 +127,51 @@ export function useReminderMutations() {
       } else if (type === 'snooze') {
         // Minimal optimistic snooze handling
         next = next.map(r => r._id === payload.id ? { ...r, _pendingSync: true } : r);
-      } else if (type === 'complete' || type === 'delete') {
+      } else if (type === 'complete') {
+        const completedItem = next.find(r => r._id === payload.id)
+          || nextBirthdays.find(r => r._id === payload.id);
         next = next.filter(r => r._id !== payload.id);
         nextBirthdays = nextBirthdays.filter(r => r._id !== payload.id);
+        if (completedItem) {
+          const completedAt = new Date();
+          nextCompleted.unshift({
+            ...completedItem,
+            status: 'completed',
+            completedAt: completedAt.toISOString(),
+            expiresAt: new Date(completedAt.getTime() + 90 * 86400000).toISOString(),
+            _pendingSync: true,
+          });
+        }
+      } else if (type === 'restore') {
+        const completedItem = nextCompleted.find(r => r._id === payload.id);
+        nextCompleted = nextCompleted.filter(r => r._id !== payload.id);
+        if (completedItem) {
+          const restored = {
+            ...completedItem,
+            status: 'active',
+            completedAt: null,
+            expiresAt: null,
+            reminderAt: restoredReminderAt(completedItem).toISOString(),
+            notified: false,
+            _pendingSync: true,
+          };
+          if (['birthday', 'special'].includes(restored.type)) nextBirthdays.unshift(restored);
+          else next.unshift(restored);
+        }
+      } else if (type === 'delete') {
+        next = next.filter(r => r._id !== payload.id);
+        nextBirthdays = nextBirthdays.filter(r => r._id !== payload.id);
+        nextCompleted = nextCompleted.filter(r => r._id !== payload.id);
       }
       
       queryClient.setQueryData(['reminders'], next);
       queryClient.setQueryData(['reminders', 'birthdays'], nextBirthdays);
-      await Promise.all([saveReminders(next), saveBirthdays(nextBirthdays)]);
+      queryClient.setQueryData(['reminders', 'completed'], nextCompleted);
+      await Promise.all([
+        saveReminders(next),
+        saveBirthdays(nextBirthdays),
+        saveCompleted(nextCompleted),
+      ]);
     } catch(e) {
       console.error('Optimistic update failed', e);
     }
@@ -120,6 +186,11 @@ export function useReminderMutations() {
 
   const completeMutation = useMutation({
     mutationFn: (id) => executeWithQueue('complete', { id }, () => remindersApi.complete(id)),
+    onSuccess: refetchAll,
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: (id) => executeWithQueue('restore', { id }, () => remindersApi.restore(id)),
     onSuccess: refetchAll,
   });
 
@@ -156,6 +227,7 @@ export function useReminderMutations() {
   return {
     createMutation,
     completeMutation,
+    restoreMutation,
     deleteMutation,
     updateMutation,
     snoozeMutation,

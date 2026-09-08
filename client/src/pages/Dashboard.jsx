@@ -27,6 +27,7 @@ export default function Dashboard() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
   const todaySectionRef = useRef(null);
+  const [selectionMode, setSelectionMode] = useState(false);
   // The set of checked reminder ids for bulk selection.
   const [checkedIds, setCheckedIds] = useState([]);
 
@@ -63,7 +64,7 @@ export default function Dashboard() {
 
   // Tap a row → toggle selection (parent shows the ActionBar).
   function toggleSelect(reminder) {
-    if (checkedIds.length > 0) {
+    if (selectionMode) {
       toggleChecked(reminder._id);
       return;
     }
@@ -73,6 +74,12 @@ export default function Dashboard() {
   // ── Bulk multi-select ───────────────────────────────────────────────────────
   function exitSelectMode() {
     setCheckedIds([]);
+    setSelectionMode(false);
+  }
+
+  function enterSelectMode() {
+    setSelectedReminder(null);
+    setSelectionMode(true);
   }
 
   function toggleChecked(id) {
@@ -88,14 +95,18 @@ export default function Dashboard() {
       {/* ── App Header ────────────────────────────────────────────────────── */}
       <header className="bg-surface border-b border-divider px-4 sticky top-0 z-20 pt-safe">
         <div className="flex items-center justify-between h-14">
-          {/* Menu button (left in RTL = visually right) */}
+          {/* Multi-select, contacts, today and search actions */}
           <div className="flex items-center gap-3">
             <button
-              className="text-textSecondary p-1 rounded-full hover:bg-gray-100 active:bg-gray-200 transition-colors"
-              aria-label="תפריט"
+              onClick={selectionMode ? exitSelectMode : enterSelectMode}
+              className={`p-1 rounded-full hover:bg-gray-100 active:bg-gray-200 transition-colors
+                          ${selectionMode ? 'text-primary bg-primary/10' : 'text-textSecondary'}`}
+              aria-label={selectionMode ? 'בטל בחירה מרובה' : 'בחירה מרובה'}
+              aria-pressed={selectionMode}
             >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-                <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 6h11M9 12h11M9 18h11" />
+                <path d="m3 6 1 1 2-2M3 12l1 1 2-2M3 18l1 1 2-2" />
               </svg>
             </button>
 
@@ -125,7 +136,7 @@ export default function Dashboard() {
 
           {/* Title (right in RTL) */}
           <h1 className="text-lg font-semibold text-textPrimary">
-            {checkedIds.length > 0 ? `נבחרו ${checkedIds.length}` : 'תזכורות'}
+            {selectionMode ? (checkedIds.length > 0 ? `נבחרו ${checkedIds.length}` : 'בחר תזכורות') : 'תזכורות'}
           </h1>
         </div>
 
@@ -206,6 +217,7 @@ export default function Dashboard() {
             todaySectionRef={todaySectionRef}
             selectedId={selectedReminder?._id ?? null}
             onSelect={toggleSelect}
+            selectionMode={selectionMode}
             checkedIds={checkedIds}
             onToggleCheck={toggleChecked}
             onQuickAdd={(sectionKey) => {
@@ -221,7 +233,7 @@ export default function Dashboard() {
       </main>
 
       {/* ── Contextual action bar (single-item; hidden when any item is checked) ──── */}
-      {checkedIds.length === 0 && (
+      {!selectionMode && (
         <ActionBar
           reminder={selectedReminder}
           onClose={() => setSelectedReminder(null)}
@@ -233,7 +245,7 @@ export default function Dashboard() {
       )}
 
       {/* ── Bulk action bar (shown when items are checked) ──────────────────── */}
-      {checkedIds.length > 0 && (
+      {selectionMode && (
         <BulkActionBar
           count={checkedIds.length}
           busy={bulkMutation.isPending}
@@ -262,7 +274,7 @@ export default function Dashboard() {
       {/* ── Bottom navigation + FAB ─────────────────────────────────────────── */}
       <BottomNav
         onAddPress={() => openModal()}
-        anyModalOpen={modalOpen || !!editingReminder || !!selectedReminder || checkedIds.length > 0}
+        anyModalOpen={modalOpen || !!editingReminder || !!selectedReminder || selectionMode}
       />
     </div>
   );

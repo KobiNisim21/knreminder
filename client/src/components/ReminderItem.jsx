@@ -20,17 +20,18 @@ const SWIPE_SNOOZE_MINUTES = 60;
  *   reminder    {object}
  *   isSelected  {boolean}       — single-select highlight (contextual ActionBar)
  *   onSelect    {fn(reminder)}  — toggle single selection
+ *   selectionMode {boolean}     — whether the circle controls bulk selection
  *   isChecked   {boolean}       — bulk-select checkbox state
  *   onToggleCheck {fn(id)}      — toggle this row's bulk checkbox
  *
- * The bulk-select checkbox is ALWAYS visible (its own tap target). Tapping it
- * toggles bulk selection without opening the single-item ActionBar; tapping the
- * rest of the row still opens the ActionBar, and swipe gestures still work.
+ * The visible circle marks the reminder complete by default. In explicit
+ * selection mode it becomes a bulk-selection checkbox.
  */
 export default function ReminderItem({
   reminder,
   isSelected,
   onSelect,
+  selectionMode = false,
   isChecked = false,
   onToggleCheck,
 }) {
@@ -166,24 +167,29 @@ export default function ReminderItem({
           onSelect?.(reminder);
         }}
       >
-        {/* Always-visible bulk-select checkbox. It's its own tap target and stops
-            propagation so ticking a box never also opens the single-item ActionBar
-            or triggers a row tap. */}
+        {/* Complete action by default; bulk checkbox in explicit selection mode. */}
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); onToggleCheck?.(reminder._id); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (selectionMode) onToggleCheck?.(reminder._id);
+            else requestConfirmation('complete');
+          }}
+          disabled={isBusy}
           className="flex-shrink-0 ml-1 mr-1 p-1 -m-0.5"
-          aria-label={isChecked ? 'בטל בחירת תזכורת' : 'בחר תזכורת'}
-          aria-pressed={isChecked}
+          aria-label={selectionMode
+            ? (isChecked ? 'בטל בחירת תזכורת' : 'בחר תזכורת')
+            : 'סמן תזכורת כהושלמה'}
+          aria-pressed={selectionMode ? isChecked : undefined}
         >
           <span
             className={`flex items-center justify-center w-5 h-5 rounded-full border-2
                         transition-colors
-                        ${isChecked
+                        ${selectionMode && isChecked
                           ? 'bg-primary border-primary text-white'
-                          : 'border-textDisabled bg-transparent'}`}
+                          : 'border-textDisabled bg-transparent active:border-green-600'}`}
           >
-            {isChecked && (
+            {selectionMode && isChecked && (
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="20 6 9 17 4 12" />
               </svg>

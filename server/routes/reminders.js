@@ -3,7 +3,11 @@ const mongoose = require('mongoose');
 const router = express.Router();
 
 const Reminder = require('../models/Reminder');
-const { scheduleReminder, cancelReminderJob } = require('../services/agendaService');
+const {
+  scheduleReminder,
+  cancelReminderJob,
+  getNextOccurrence,
+} = require('../services/agendaService');
 const asyncHandler = require('../middleware/asyncHandler');
 const resolveUser = require('../middleware/resolveUser');
 const { createBackup } = require('../services/backupService');
@@ -343,6 +347,45 @@ router.patch(
     reminder.status = 'completed';
     reminder.completedAt = new Date();
     await reminder.save();
+
+    res.json({ success: true, data: reminder });
+  })
+);
+
+// ─── PATCH /api/reminders/:id/restore ────────────────────────────────────────
+// Restore a completed reminder and schedule it again. Future reminders retain
+// their original time; overdue recurring reminders advance to their next
+// occurrence; overdue one-time reminders are restored for five minutes from now.
+router.patch(
+  '/:id/restore',
+  asyncHandler(async (req, res) => {
+    const reminder = await Reminder.findOne({ _id: req.params.id, chatId: req.chatId });
+    if (!reminder) {
+      return res.status(404).json({ success: false, message: 'תזכורת לא נמצאה' });
+    }
+    if (reminder.status !== 'completed') {
+      return res.status(400).json({ success: false, message: 'רק תזכורת שהושלמה ניתנת לשחזור' });
+    }
+
+    const now = new Date();
+    let restoredAt = new Date(reminder.reminderAt);
+    if (restoredAt <= now) {
+      if (reminder.isRecurring && reminder.recurrence?.frequency) {
+        do {
+          restoredAt = getNextOccurrence(restoredAt, reminder.recurrence.frequency);
+        } while (restoredAt <= now);
+      } else {
+        restoredAt = new Date(now.getTime() + 5 * 60 * 1000);
+      }
+    }
+
+    reminder.status = 'active';
+    reminder.completedAt = null;
+    reminder.expiresAt = null;
+    reminder.reminderAt = restoredAt;
+    reminder.notified = false;
+    await reminder.save();
+    await scheduleReminder(reminder);
 
     res.json({ success: true, data: reminder });
   })

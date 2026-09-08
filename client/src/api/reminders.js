@@ -103,6 +103,9 @@ export const remindersApi = {
   /** Mark reminder as completed (triggers 90-day TTL) */
   complete: (id) => api.patch(`/reminders/${id}/complete`),
 
+  /** Restore a completed reminder to the active list */
+  restore: (id) => api.patch(`/reminders/${id}/restore`),
+
   /**
    * Snooze a reminder — either by a relative number of minutes, or to an
    * absolute datetime.

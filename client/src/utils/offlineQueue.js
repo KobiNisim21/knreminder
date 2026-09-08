@@ -26,7 +26,9 @@ export async function processQueue(queryClient) {
     emitUpdate();
     
     const actions = await getPendingActions();
-    const pending = actions.filter(a => a.status !== 'failed');
+    const pending = actions
+      .filter(a => a.status !== 'failed')
+      .sort((a, b) => a.createdAt - b.createdAt);
     
     if (pending.length === 0) {
       isSyncing = false;
@@ -54,6 +56,9 @@ export async function processQueue(queryClient) {
             break;
           case 'complete':
             await remindersApi.complete(action.payload.id);
+            break;
+          case 'restore':
+            await remindersApi.restore(action.payload.id);
             break;
           case 'snooze':
             await remindersApi.snooze(action.payload.id, action.payload.arg);

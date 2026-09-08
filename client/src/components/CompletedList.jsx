@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { useCompletedReminders } from '../hooks/useReminders';
 import { useReminderMutations } from '../hooks/useReminderMutations';
-import { formatRelativeTime, formatFullHebrew, parseDisplayTime } from '../utils/dateHelpers';
+import { formatRelativeTime, parseDisplayTime } from '../utils/dateHelpers';
 
 /**
  * CompletedList — Scrollable list of completed reminders.
@@ -16,7 +17,8 @@ import { formatRelativeTime, formatFullHebrew, parseDisplayTime } from '../utils
  */
 export default function CompletedList() {
   const { data: completed, isLoading, isError, error, refetch } = useCompletedReminders();
-  const { deleteMutation } = useReminderMutations();
+  const { restoreMutation, deleteMutation } = useReminderMutations();
+  const [actionError, setActionError] = useState('');
 
   if (isLoading) return <CompletedSkeleton />;
 
@@ -54,11 +56,29 @@ export default function CompletedList() {
         {completed.length} תזכורות הושלמו — נשמרות ל-90 יום
       </div>
 
+      {actionError ? (
+        <p className="border-b border-red-100 bg-red-50 px-4 py-2 text-sm text-accent">
+          {actionError}
+        </p>
+      ) : null}
+
       {completed.map((reminder) => (
         <CompletedItem
           key={reminder._id}
           reminder={reminder}
-          onDelete={() => deleteMutation.mutate(reminder._id)}
+          onRestore={() => {
+            setActionError('');
+            restoreMutation.mutate(reminder._id, {
+              onError: (err) => setActionError(err?.message || 'שחזור התזכורת נכשל'),
+            });
+          }}
+          onDelete={() => {
+            setActionError('');
+            deleteMutation.mutate(reminder._id, {
+              onError: (err) => setActionError(err?.message || 'מחיקת התזכורת נכשלה'),
+            });
+          }}
+          isRestoring={restoreMutation.isPending && restoreMutation.variables === reminder._id}
           isDeleting={deleteMutation.isPending && deleteMutation.variables === reminder._id}
         />
       ))}
@@ -70,13 +90,14 @@ export default function CompletedList() {
 
 // ─── Single completed item row ─────────────────────────────────────────────────
 
-function CompletedItem({ reminder, onDelete, isDeleting }) {
+function CompletedItem({ reminder, onRestore, onDelete, isRestoring, isDeleting }) {
   const daysLeft = getDaysLeft(reminder.expiresAt);
   const { hours, minutes } = parseDisplayTime(reminder.reminderAt);
+  const isBusy = isRestoring || isDeleting;
 
   return (
     <div className={`border-b border-divider bg-white px-4 py-3.5
-                     transition-opacity ${isDeleting ? 'opacity-40' : ''}`}>
+                     transition-opacity ${isBusy ? 'opacity-40' : ''}`}>
       <div className="flex items-start gap-3">
 
         {/* Checkmark */}
@@ -114,19 +135,34 @@ function CompletedItem({ reminder, onDelete, isDeleting }) {
           </div>
         </div>
 
-        {/* Delete button */}
-        <button
-          onClick={onDelete}
-          disabled={isDeleting}
-          className="flex-shrink-0 p-1.5 text-textDisabled hover:text-accent
-                     active:scale-90 transition-all rounded-full hover:bg-red-50"
-          aria-label="מחק לצמיתות"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
-            <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
-          </svg>
-        </button>
+        <div className="flex flex-shrink-0 items-center gap-1">
+          <button
+            onClick={onRestore}
+            disabled={isBusy}
+            className="flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-1.5
+                       text-xs font-semibold text-green-700 active:scale-95
+                       transition-all disabled:opacity-50"
+            aria-label={`שחזר את ${reminder.text}`}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+              <path d="M3 3v5h5" />
+            </svg>
+            {isRestoring ? 'משחזר…' : 'שחזר'}
+          </button>
+          <button
+            onClick={onDelete}
+            disabled={isBusy}
+            className="p-1.5 text-textDisabled hover:text-accent active:scale-90
+                       transition-all rounded-full hover:bg-red-50"
+            aria-label="מחק לצמיתות"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+              <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   );
