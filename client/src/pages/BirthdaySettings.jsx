@@ -33,7 +33,7 @@ export default function BirthdaySettings() {
   const b = settings.birthdays;
 
   return (
-    <SettingsPage title="ימי הולדת" backTo="/settings">
+    <SettingsPage title="ימי הולדת ואירועים" backTo="/settings">
       {/* ── Default color ───────────────────────────────────────────────────── */}
       <Section caption="ברירת מחדל">
         <div className="flex items-center gap-4 px-5 py-4">

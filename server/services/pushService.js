@@ -104,7 +104,7 @@ async function sendToSubscription(doc, payload) {
 }
 
 async function sendReminderPush(reminder) {
-  if (reminder.type === 'birthday') {
+  if (['birthday', 'special'].includes(reminder.type)) {
     return { attempted: 0, sent: 0 };
   }
 
@@ -188,7 +188,7 @@ async function dispatchBirthdayNotifications(subscription, todayKey) {
   const targetKey = addDays(todayKey, preferences.birthdayDaysBefore || 0);
   const birthdays = await Reminder.find({
     chatId: subscription.chatId,
-    type: 'birthday',
+    type: { $in: ['birthday', 'special'] },
     status: { $in: ['active', 'snoozed'] },
   }).lean();
 
@@ -201,14 +201,16 @@ async function dispatchBirthdayNotifications(subscription, todayKey) {
 
     const days = preferences.birthdayDaysBefore || 0;
     const timing = days === 0 ? 'היום' : days === 1 ? 'מחר' : `בעוד ${days} ימים`;
+    const isSpecial = birthday.type === 'special';
+    const notificationKey = isSpecial ? 'special' : 'birthday';
     const delivered = await sendCalendarEvent(
       subscription,
-      `birthday:${birthday._id}:${targetKey}`,
+      `${notificationKey}:${birthday._id}:${targetKey}`,
       {
-        title: '🎂 יום הולדת מתקרב',
+        title: isSpecial ? '📅 אירוע מיוחד מתקרב' : '🎂 יום הולדת מתקרב',
         body: `${birthday.personName || birthday.text} — ${timing}`,
         url: '/birthdays',
-        tag: `birthday-${birthday._id}-${targetKey}`,
+        tag: `${notificationKey}-${birthday._id}-${targetKey}`,
       }
     );
     if (delivered) sent += 1;

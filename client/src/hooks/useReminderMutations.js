@@ -1,6 +1,12 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { remindersApi } from '../api/reminders';
-import { addPendingAction, loadReminders, saveReminders } from '../utils/offlineStore';
+import {
+  addPendingAction,
+  loadReminders,
+  saveReminders,
+  loadBirthdays,
+  saveBirthdays,
+} from '../utils/offlineStore';
 import { queueEventTarget } from '../utils/offlineQueue';
 
 /**
@@ -59,31 +65,47 @@ export function useReminderMutations() {
     
     // Optimistic update
     try {
-      const current = queryClient.getQueryData(['reminders']) || await loadReminders();
+      const cachedReminders = queryClient.getQueryData(['reminders']);
+      const cachedBirthdays = queryClient.getQueryData(['reminders', 'birthdays']);
+      const [current, birthdays] = await Promise.all([
+        cachedReminders || loadReminders(),
+        cachedBirthdays || loadBirthdays(),
+      ]);
       let next = [...current];
+      let nextBirthdays = [...birthdays];
       
       if (type === 'create') {
-        next.unshift({
+        const optimisticItem = {
           _id: actionId, // temp id
           text: payload.text || payload.personName,
           reminderAt: payload.reminderAt,
           type: payload.type || 'reminder',
+          personName: payload.personName || null,
+          birthYear: payload.birthYear ?? null,
           isImportant: payload.isImportant || false,
           isRecurring: payload.isRecurring || false,
           recurrence: payload.recurrence || null,
           _pendingSync: true
-        });
+        };
+        if (['birthday', 'special'].includes(optimisticItem.type)) {
+          nextBirthdays.unshift(optimisticItem);
+        } else {
+          next.unshift(optimisticItem);
+        }
       } else if (type === 'update') {
         next = next.map(r => r._id === payload.id ? { ...r, ...payload.data, _pendingSync: true } : r);
+        nextBirthdays = nextBirthdays.map(r => r._id === payload.id ? { ...r, ...payload.data, _pendingSync: true } : r);
       } else if (type === 'snooze') {
         // Minimal optimistic snooze handling
         next = next.map(r => r._id === payload.id ? { ...r, _pendingSync: true } : r);
       } else if (type === 'complete' || type === 'delete') {
         next = next.filter(r => r._id !== payload.id);
+        nextBirthdays = nextBirthdays.filter(r => r._id !== payload.id);
       }
       
       queryClient.setQueryData(['reminders'], next);
-      await saveReminders(next);
+      queryClient.setQueryData(['reminders', 'birthdays'], nextBirthdays);
+      await Promise.all([saveReminders(next), saveBirthdays(nextBirthdays)]);
     } catch(e) {
       console.error('Optimistic update failed', e);
     }

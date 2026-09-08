@@ -40,7 +40,7 @@ export default function BottomNav({ onAddPress, anyModalOpen = false }) {
     null,
     {
       id: 'birthdays',
-      label: 'ימי הולדת',
+      label: 'אירועים',
       path: '/birthdays',
       icon: (
         <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">

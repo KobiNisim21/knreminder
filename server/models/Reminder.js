@@ -45,11 +45,11 @@ const ReminderSchema = new mongoose.Schema(
 
     // ── Item type ────────────────────────────────────────────────────────────────
     // 'reminder'  → a standard one-time / recurring reminder
-    // 'birthday'  → a person's birthday. Always yearly-recurring; drives the
-    //               dedicated Birthdays feed and age computation.
+    // 'birthday'  → a person's birthday. Always yearly-recurring.
+    // 'special'   → a yearly special event without age computation.
     type: {
       type: String,
-      enum: ['reminder', 'birthday'],
+      enum: ['reminder', 'birthday', 'special'],
       default: 'reminder',
     },
 

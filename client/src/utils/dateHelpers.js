@@ -218,6 +218,7 @@ export function computeUpcomingAge(birthYear, occurrenceDate) {
  */
 export function formatBirthdayLabel(b) {
   const name = b.personName || b.text || '';
+  if (b.type === 'special') return name;
   const age = computeUpcomingAge(b.birthYear, b.reminderAt);
   if (age === null) return name;
   return `y/o ${age} ,${name}`;

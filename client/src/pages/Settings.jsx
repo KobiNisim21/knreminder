@@ -127,8 +127,8 @@ export default function Settings() {
             disabled={!push.subscribed || settings.notifications.allReminders}
             onChange={(value) => updateNotifications({ importantReminders: value })} />
         </Row>
-        <Row label="ימי הולדת">
-          <Toggle label="ימי הולדת" checked={settings.notifications.birthdays}
+        <Row label="ימי הולדת ואירועים">
+          <Toggle label="ימי הולדת ואירועים" checked={settings.notifications.birthdays}
             disabled={!push.subscribed}
             onChange={(value) => updateNotifications({ birthdays: value })} />
         </Row>
@@ -205,7 +205,7 @@ export default function Settings() {
       <Section>
         <Row
           first
-          label="ימי הולדת"
+          label="ימי הולדת ואירועים"
           onClick={() => navigate('/settings/birthdays')}
         />
       </Section>

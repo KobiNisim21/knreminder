@@ -20,10 +20,9 @@ router.get(
     const reminders = await Reminder.find({
       chatId: req.chatId,
       status: { $in: ['active', 'snoozed'] },
-      // Birthdays live in their own dedicated feed — keep them out of the
-      // main reminders timeline. { $ne: 'birthday' } also matches legacy docs
-      // where `type` is undefined.
-      type: { $ne: 'birthday' },
+      // Yearly celebrations live in their own feed. $nin also matches legacy
+      // documents where `type` is undefined.
+      type: { $nin: ['birthday', 'special'] },
     }).sort({ reminderAt: 1 });
 
     res.json({ success: true, count: reminders.length, data: reminders });
@@ -31,13 +30,13 @@ router.get(
 );
 
 // ─── GET /api/reminders/birthdays ─────────────────────────────────────────────
-// Returns all birthday items, sorted by their next upcoming occurrence.
+// Returns birthdays and special events, sorted by their next occurrence.
 router.get(
   '/birthdays',
   asyncHandler(async (req, res) => {
     const birthdays = await Reminder.find({
       chatId: req.chatId,
-      type: 'birthday',
+      type: { $in: ['birthday', 'special'] },
       status: { $in: ['active', 'snoozed'] },
     }).sort({ reminderAt: 1 });
 
@@ -61,7 +60,7 @@ router.get(
 );
 
 // ─── GET /api/reminders/export ────────────────────────────────────────────────
-// Full data dump for backup: every reminder + birthday (all statuses).
+// Full data dump for backup: every reminder and yearly event (all statuses).
 // The client serializes this into a downloadable `.knr` file.
 router.get(
   '/export',
@@ -182,19 +181,29 @@ router.post(
     const { text, reminderAt, isRecurring, recurrence, isImportant, type, personName, birthYear } =
       req.body;
 
+    if (type !== undefined && !['reminder', 'birthday', 'special'].includes(type)) {
+      return res.status(400).json({ success: false, message: 'סוג האירוע אינו תקין' });
+    }
+
+    const parsedReminderAt = new Date(reminderAt);
+    if (!reminderAt || Number.isNaN(parsedReminderAt.getTime())) {
+      return res.status(400).json({ success: false, message: 'מועד התזכורת אינו תקין' });
+    }
+
     const isBirthday = type === 'birthday';
+    const isCelebration = isBirthday || type === 'special';
 
     // Birthday-specific validation
-    if (isBirthday && !personName?.trim()) {
+    if (isCelebration && !personName?.trim()) {
       return res.status(400).json({
         success: false,
-        message: 'נא להזין שם עבור יום ההולדת',
+        message: isBirthday ? 'נא להזין שם עבור יום ההולדת' : 'נא להזין שם לאירוע',
       });
     }
 
     // For standard reminders, validate recurrence payload when isRecurring is true.
     // Birthdays are always yearly-recurring regardless of the isRecurring flag.
-    if (!isBirthday && isRecurring && (!recurrence || !recurrence.frequency)) {
+    if (!isCelebration && isRecurring && (!recurrence || !recurrence.frequency)) {
       return res.status(400).json({
         success: false,
         message: 'נא לבחור תדירות חזרה',
@@ -202,14 +211,14 @@ router.post(
     }
 
     const reminder = await Reminder.create(
-      isBirthday
+      isCelebration
         ? {
             chatId: req.chatId,
             text,
-            type: 'birthday',
+            type,
             personName: personName.trim(),
-            birthYear: birthYear ?? null,
-            reminderAt: new Date(reminderAt),
+            birthYear: isBirthday ? (birthYear ?? null) : null,
+            reminderAt: parsedReminderAt,
             isRecurring: true,
             recurrence: { frequency: 'yearly' },
             isImportant: isImportant || false,
@@ -218,7 +227,7 @@ router.post(
             chatId: req.chatId,
             text,
             type: 'reminder',
-            reminderAt: new Date(reminderAt),
+            reminderAt: parsedReminderAt,
             isRecurring: isRecurring || false,
             recurrence: isRecurring ? recurrence : null,
             isImportant: isImportant || false,
@@ -248,16 +257,36 @@ router.patch(
       });
     }
 
-    const { text, reminderAt, isRecurring, recurrence, isImportant, personName, birthYear } =
+    const { text, reminderAt, isRecurring, recurrence, isImportant, type, personName, birthYear } =
       req.body;
 
-    const isBirthday = reminder.type === 'birthday';
+    if (type !== undefined && !['reminder', 'birthday', 'special'].includes(type)) {
+      return res.status(400).json({ success: false, message: 'סוג האירוע אינו תקין' });
+    }
+
+    const nextType = type ?? reminder.type;
+    const isBirthday = nextType === 'birthday';
+    const isCelebration = isBirthday || nextType === 'special';
+    const nextName = personName !== undefined ? personName : reminder.personName;
+    if (isCelebration && !nextName?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: isBirthday ? 'נא להזין שם עבור יום ההולדת' : 'נא להזין שם לאירוע',
+      });
+    }
 
     let timeChanged = false;
+    let scheduleChanged = false;
     if (text !== undefined) reminder.text = text;
     if (isImportant !== undefined) reminder.isImportant = isImportant;
-    if (personName !== undefined) reminder.personName = personName;
-    if (birthYear !== undefined) reminder.birthYear = birthYear;
+    if (type !== undefined && type !== reminder.type) {
+      reminder.type = type;
+      reminder.notified = false;
+      scheduleChanged = true;
+    }
+    if (personName !== undefined) reminder.personName = personName.trim();
+    if (isBirthday && birthYear !== undefined) reminder.birthYear = birthYear;
+    if (nextType === 'special') reminder.birthYear = null;
     if (reminderAt !== undefined) {
       const newTime = new Date(reminderAt);
       if (Number.isNaN(newTime.getTime())) {
@@ -270,16 +299,23 @@ router.patch(
       reminder.reminderAt = newTime;
       reminder.notified = false;
     }
-    // Birthdays stay yearly-recurring; only standard reminders can toggle recurrence.
-    if (!isBirthday && isRecurring !== undefined) {
+    // Birthdays and special events are always yearly-recurring.
+    if (isCelebration) {
+      if (!reminder.isRecurring || reminder.recurrence?.frequency !== 'yearly') {
+        scheduleChanged = true;
+      }
+      reminder.isRecurring = true;
+      reminder.recurrence = { frequency: 'yearly' };
+    } else if (isRecurring !== undefined) {
       reminder.isRecurring = isRecurring;
       reminder.recurrence = isRecurring ? recurrence : null;
+      scheduleChanged = true;
     }
 
     await reminder.save();
 
     // Reschedule only if time or recurrence changed
-    if (timeChanged || isRecurring !== undefined) {
+    if (timeChanged || scheduleChanged) {
       await scheduleReminder(reminder);
     }
 

@@ -4,7 +4,7 @@ import { remindersApi } from '../api/reminders';
 import { SettingsPage, Section, Row } from '../components/settings/SettingsPrimitives';
 
 /**
- * BackupRestore — export/import all reminders + birthdays.
+ * BackupRestore — export/import all reminders, birthdays, and special events.
  *
  * Backup:  GET /export → serialize → download `backup.knr` (JSON payload).
  * Restore: pick a `.knr` file → parse + validate → POST /import →
@@ -88,7 +88,7 @@ export default function BackupRestore() {
 
   return (
     <SettingsPage title="גיבוי ושחזור" backTo="/more">
-      <Section footer="כל התזכורות וימי ההולדת יישמרו בקובץ 'backup.knr'.">
+      <Section footer="כל התזכורות, ימי ההולדת והאירועים יישמרו בקובץ 'backup.knr'.">
         <Row
           first
           label={busy === 'backup' ? 'מגבה…' : 'גיבוי'}
@@ -98,7 +98,7 @@ export default function BackupRestore() {
         />
       </Section>
 
-      <Section footer="התזכורות ישוחזרו מתוך קובץ 'backup.knr'.">
+      <Section footer="התזכורות והאירועים ישוחזרו מתוך קובץ 'backup.knr'.">
         <Row
           first
           label={busy === 'restore' ? 'משחזר…' : 'שחזור'}

@@ -58,10 +58,10 @@ export function useCompletedReminders() {
 }
 
 /**
- * useBirthdays — React Query hook for the birthdays feed.
+ * useBirthdays — React Query hook for the birthdays and special-events feed.
  *
  * Polls every 60s like the main reminders list so the feed stays fresh
- * after a birthday rolls over to next year via the recurrence engine.
+ * after a yearly event rolls over to next year via the recurrence engine.
  */
 export function useBirthdays() {
   return useQuery({

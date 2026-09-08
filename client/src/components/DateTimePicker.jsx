@@ -5,7 +5,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
  *
  * Renders two side-by-side drum scrollers:
  *   Left column:  time slots (00:00 – 23:59 in 5-minute intervals)
- *   Right column: date slots (today + next 365 days)
+ *   Right column: date slots (today + next five years)
  *
  * The selected item is always centered in the visible window (3 visible items).
  * Uses CSS snap scrolling for the native feel.
@@ -182,6 +182,7 @@ const DrumColumn = forwardRef(function DrumColumn(
 // old reminder's original date can be selected. The Hebrew label includes the
 // year for past dates (they can be from previous years) to avoid ambiguity.
 const PAST_DAYS = 365;
+const FUTURE_DAYS = 366 * 5;
 
 function buildDateOptions(allowPast = false) {
   const options = [];
@@ -201,15 +202,16 @@ function buildDateOptions(allowPast = false) {
   });
 
   const start = allowPast ? -PAST_DAYS : 0;
-  for (let i = start; i < 365; i++) {
+  for (let i = start; i <= FUTURE_DAYS; i++) {
     const date = new Date(today);
     date.setDate(today.getDate() + i);
     let label;
     if (i === 0) label = 'היום';
     else if (i === 1) label = 'מחר';
     else if (i === -1) label = 'אתמול';
-    else if (i < 0) label = hebrewDateWithYear.format(date);
-    else label = hebrewDate.format(date);
+    else if (i < 0 || date.getFullYear() !== today.getFullYear()) {
+      label = hebrewDateWithYear.format(date);
+    } else label = hebrewDate.format(date);
     options.push({ date, label });
   }
   return options;

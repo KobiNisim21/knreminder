@@ -18,20 +18,31 @@ function birthdayColorHex(key) {
 }
 
 /**
- * Birthdays — Upcoming birthday feed, grouped chronologically by date.
+ * Birthdays — Upcoming birthdays and special events, grouped by date.
  *
  * Each row shows:
  *   • The occurrence time (e.g. 10:00) in red, BZ-Reminder style
  *   • The label "y/o 57 ,אמא" (age the person turns + name)
  *   • A cake icon on the trailing side
  *
- * Birthdays are yearly-recurring reminders (type:'birthday'); the recurrence
- * engine advances reminderAt to next year after each notification fires.
+ * Every item is yearly-recurring; the recurrence engine advances reminderAt
+ * to next year after each notification fires.
  */
 export default function Birthdays() {
   const { data: birthdays, isLoading, isError, error, refetch, isFetching } = useBirthdays();
   const { settings } = useSettings();
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
+
+  function openAdd() {
+    setEditingItem(null);
+    setModalOpen(true);
+  }
+
+  function closeModal() {
+    setModalOpen(false);
+    setEditingItem(null);
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -50,13 +61,13 @@ export default function Birthdays() {
             </svg>
           </button>
 
-          <h1 className="text-lg font-semibold text-textPrimary">ימי הולדת</h1>
+          <h1 className="text-lg font-semibold text-textPrimary">ימי הולדת ואירועים</h1>
 
           {/* Add button (right in RTL) */}
           <button
-            onClick={() => setModalOpen(true)}
+            onClick={openAdd}
             className="text-primary p-1 rounded-full active:bg-gray-100 transition-colors"
-            aria-label="הוסף יום הולדת"
+            aria-label="הוסף יום הולדת או אירוע"
           >
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
@@ -91,37 +102,44 @@ export default function Birthdays() {
         {!isLoading && !isError && (
           <BirthdayFeed
             birthdays={birthdays ?? []}
-            onAdd={() => setModalOpen(true)}
+            onAdd={openAdd}
+            onEdit={setEditingItem}
             accentColor={birthdayColorHex(settings.birthdays.color)}
           />
         )}
       </main>
 
       {/* ── Modal + Nav ─────────────────────────────────────────────────────── */}
-      <AddBirthdayModal isOpen={modalOpen} onClose={() => setModalOpen(false)} />
-      <BottomNav onAddPress={() => setModalOpen(true)} anyModalOpen={modalOpen} />
+      {(modalOpen || editingItem) && (
+        <AddBirthdayModal
+          isOpen
+          item={editingItem}
+          onClose={closeModal}
+        />
+      )}
+      <BottomNav onAddPress={openAdd} anyModalOpen={modalOpen || Boolean(editingItem)} />
     </div>
   );
 }
 
 // ─── Feed ───────────────────────────────────────────────────────────────────────
 
-function BirthdayFeed({ birthdays, onAdd, accentColor }) {
+function BirthdayFeed({ birthdays, onAdd, onEdit, accentColor }) {
   if (birthdays.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-24 px-8 text-center gap-4 animate-fade-in">
         <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mb-2">
           <CakeIcon size={40} className="text-textDisabled" />
         </div>
-        <p className="text-base font-medium text-textPrimary">אין ימי הולדת</p>
+        <p className="text-base font-medium text-textPrimary">אין ימי הולדת או אירועים</p>
         <p className="text-sm text-textSecondary leading-relaxed">
-          לחץ על <span className="text-primary font-bold">+</span> כדי להוסיף יום הולדת ראשון
+          לחץ על <span className="text-primary font-bold">+</span> כדי להוסיף אירוע ראשון
         </p>
         <button
           onClick={onAdd}
           className="mt-2 px-6 py-2.5 bg-primary text-white rounded-ios text-sm font-medium active:scale-95 transition-transform"
         >
-          הוסף יום הולדת
+          הוסף אירוע
         </button>
       </div>
     );
@@ -137,7 +155,7 @@ function BirthdayFeed({ birthdays, onAdd, accentColor }) {
           </div>
 
           {/* Birthday row */}
-          <BirthdayRow birthday={b} accentColor={accentColor} />
+          <BirthdayRow birthday={b} accentColor={accentColor} onEdit={onEdit} />
         </section>
       ))}
       <div className="h-4" />
@@ -147,12 +165,17 @@ function BirthdayFeed({ birthdays, onAdd, accentColor }) {
 
 // ─── Row ────────────────────────────────────────────────────────────────────────
 
-function BirthdayRow({ birthday, accentColor }) {
+function BirthdayRow({ birthday, accentColor, onEdit }) {
   const { hours, minutes } = parseDisplayTime(birthday.reminderAt);
   const label = formatBirthdayLabel(birthday);
 
   return (
-    <div className="reminder-row bg-surface">
+    <button
+      type="button"
+      onClick={() => onEdit(birthday)}
+      className="reminder-row bg-surface w-full text-right"
+      aria-label={`ערוך ${birthday.type === 'special' ? 'אירוע' : 'יום הולדת'} ${birthday.personName || ''}`}
+    >
       {/* Time column — tinted with the user's default birthday color */}
       <div className="min-w-[76px] text-right ml-3 flex-shrink-0">
         <div className="time-display" style={{ color: accentColor }}>
@@ -167,15 +190,25 @@ function BirthdayRow({ birthday, accentColor }) {
         </p>
       </div>
 
-      {/* Cake icon (trailing) — tinted with the default birthday color */}
+      {/* Type icon (trailing) — tinted with the configured color */}
       <div className="flex-shrink-0 ml-1" style={{ color: accentColor }}>
-        <CakeIcon size={22} />
+        {birthday.type === 'special' ? <SpecialEventIcon size={22} /> : <CakeIcon size={22} />}
       </div>
-    </div>
+    </button>
   );
 }
 
 // ─── Icons & skeleton ─────────────────────────────────────────────────────────
+
+function SpecialEventIcon({ size = 22 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M8 3v4M16 3v4M3 10h18" />
+      <path d="m12 13 .9 1.8 2 .3-1.45 1.4.35 2-1.8-.95-1.8.95.35-2-1.45-1.4 2-.3Z" />
+    </svg>
+  );
+}
 
 function CakeIcon({ size = 22, className = '' }) {
   return (
