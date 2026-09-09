@@ -24,9 +24,6 @@ router.get(
     const reminders = await Reminder.find({
       chatId: req.chatId,
       status: { $in: ['active', 'snoozed'] },
-      // Yearly celebrations live in their own feed. $nin also matches legacy
-      // documents where `type` is undefined.
-      type: { $nin: ['birthday', 'special'] },
     }).sort({ reminderAt: 1 });
 
     res.json({ success: true, count: reminders.length, data: reminders });

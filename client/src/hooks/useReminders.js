@@ -24,8 +24,13 @@ export function useReminders() {
         await setLastSyncTime(Date.now());
         return data;
       } catch (err) {
-        const cached = await loadReminders();
-        if (cached && cached.length > 0) return cached;
+        const [cached, cachedYearlyEvents] = await Promise.all([
+          loadReminders(),
+          loadBirthdays(),
+        ]);
+        const merged = new Map();
+        for (const item of [...cached, ...cachedYearlyEvents]) merged.set(item._id, item);
+        if (merged.size > 0) return [...merged.values()];
         throw err;
       }
     },

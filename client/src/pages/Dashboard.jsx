@@ -4,6 +4,7 @@ import { useReminderMutations } from '../hooks/useReminderMutations';
 import ReminderList from '../components/ReminderList';
 import BottomNav from '../components/BottomNav';
 import AddReminderModal from '../components/AddReminderModal';
+import AddBirthdayModal from '../components/AddBirthdayModal';
 import EditReminderModal from '../components/EditReminderModal';
 import ActionBar from '../components/ActionBar';
 import BulkActionBar from '../components/BulkActionBar';
@@ -23,6 +24,7 @@ export default function Dashboard() {
   const [modalOpen, setModalOpen] = useState(false);
   const [initialModalDate, setInitialModalDate] = useState(null);
   const [editingReminder, setEditingReminder] = useState(null);
+  const [editingYearlyEvent, setEditingYearlyEvent] = useState(null);
   const [selectedReminder, setSelectedReminder] = useState(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -84,9 +86,18 @@ export default function Dashboard() {
 
   function toggleChecked(id) {
     setSelectedReminder(null); // suppress single-item action bar
+    setSelectionMode(true);
     setCheckedIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
+  }
+
+  function openEditor(reminder) {
+    if (['birthday', 'special'].includes(reminder.type)) {
+      setEditingYearlyEvent(reminder);
+    } else {
+      setEditingReminder(reminder);
+    }
   }
 
   return (
@@ -217,7 +228,6 @@ export default function Dashboard() {
             todaySectionRef={todaySectionRef}
             selectedId={selectedReminder?._id ?? null}
             onSelect={toggleSelect}
-            selectionMode={selectionMode}
             checkedIds={checkedIds}
             onToggleCheck={toggleChecked}
             onQuickAdd={(sectionKey) => {
@@ -237,7 +247,7 @@ export default function Dashboard() {
         <ActionBar
           reminder={selectedReminder}
           onClose={() => setSelectedReminder(null)}
-          onEdit={(reminder) => setEditingReminder(reminder)}
+          onEdit={openEditor}
           onComplete={(id) => completeMutation.mutate(id)}
           onSnooze={(id, payload) => snoozeMutation.mutate({ id, ...payload })}
           onRemove={(id) => deleteMutation.mutate(id)}
@@ -270,11 +280,18 @@ export default function Dashboard() {
         reminder={editingReminder}
         onClose={() => setEditingReminder(null)}
       />
+      {editingYearlyEvent ? (
+        <AddBirthdayModal
+          isOpen
+          item={editingYearlyEvent}
+          onClose={() => setEditingYearlyEvent(null)}
+        />
+      ) : null}
 
       {/* ── Bottom navigation + FAB ─────────────────────────────────────────── */}
       <BottomNav
         onAddPress={() => openModal()}
-        anyModalOpen={modalOpen || !!editingReminder || !!selectedReminder || selectionMode}
+        anyModalOpen={modalOpen || !!editingReminder || !!editingYearlyEvent || !!selectedReminder || selectionMode}
       />
     </div>
   );

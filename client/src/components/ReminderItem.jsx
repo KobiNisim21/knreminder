@@ -20,18 +20,16 @@ const SWIPE_SNOOZE_MINUTES = 60;
  *   reminder    {object}
  *   isSelected  {boolean}       — single-select highlight (contextual ActionBar)
  *   onSelect    {fn(reminder)}  — toggle single selection
- *   selectionMode {boolean}     — whether the circle controls bulk selection
  *   isChecked   {boolean}       — bulk-select checkbox state
  *   onToggleCheck {fn(id)}      — toggle this row's bulk checkbox
  *
- * The visible circle marks the reminder complete by default. In explicit
- * selection mode it becomes a bulk-selection checkbox.
+ * The visible circle controls bulk selection. Completion remains available by
+ * swiping left or through the row action bar, both with the existing safeguards.
  */
 export default function ReminderItem({
   reminder,
   isSelected,
   onSelect,
-  selectionMode = false,
   isChecked = false,
   onToggleCheck,
 }) {
@@ -167,29 +165,23 @@ export default function ReminderItem({
           onSelect?.(reminder);
         }}
       >
-        {/* Complete action by default; bulk checkbox in explicit selection mode. */}
+        {/* Always-visible bulk-selection checkbox. */}
         <button
           type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (selectionMode) onToggleCheck?.(reminder._id);
-            else requestConfirmation('complete');
-          }}
+          onClick={(e) => { e.stopPropagation(); onToggleCheck?.(reminder._id); }}
           disabled={isBusy}
           className="flex-shrink-0 ml-1 mr-1 p-1 -m-0.5"
-          aria-label={selectionMode
-            ? (isChecked ? 'בטל בחירת תזכורת' : 'בחר תזכורת')
-            : 'סמן תזכורת כהושלמה'}
-          aria-pressed={selectionMode ? isChecked : undefined}
+          aria-label={isChecked ? 'בטל בחירת תזכורת' : 'בחר תזכורת'}
+          aria-pressed={isChecked}
         >
           <span
             className={`flex items-center justify-center w-5 h-5 rounded-full border-2
                         transition-colors
-                        ${selectionMode && isChecked
+                        ${isChecked
                           ? 'bg-primary border-primary text-white'
-                          : 'border-textDisabled bg-transparent active:border-green-600'}`}
+                          : 'border-textDisabled bg-transparent'}`}
           >
-            {selectionMode && isChecked && (
+            {isChecked && (
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
@@ -238,6 +230,20 @@ export default function ReminderItem({
             </span>
           )}
         </div>
+
+        {/* Dedicated completion action, separate from the bulk-select circle. */}
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); requestConfirmation('complete'); }}
+          disabled={isBusy}
+          className="flex-shrink-0 rounded-full bg-green-50 p-1.5 text-green-600
+                     active:scale-90 transition-transform disabled:opacity-50"
+          aria-label="סמן תזכורת כהושלמה"
+        >
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        </button>
 
         {/* Selected check indicator (single-select highlight) */}
         {isSelected && (

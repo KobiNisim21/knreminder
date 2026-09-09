@@ -118,9 +118,8 @@ export function useReminderMutations() {
         };
         if (['birthday', 'special'].includes(optimisticItem.type)) {
           nextBirthdays.unshift(optimisticItem);
-        } else {
-          next.unshift(optimisticItem);
         }
+        next.unshift(optimisticItem);
       } else if (type === 'update') {
         next = next.map(r => r._id === payload.id ? { ...r, ...payload.data, _pendingSync: true } : r);
         nextBirthdays = nextBirthdays.map(r => r._id === payload.id ? { ...r, ...payload.data, _pendingSync: true } : r);
@@ -156,7 +155,7 @@ export function useReminderMutations() {
             _pendingSync: true,
           };
           if (['birthday', 'special'].includes(restored.type)) nextBirthdays.unshift(restored);
-          else next.unshift(restored);
+          next.unshift(restored);
         }
       } else if (type === 'delete') {
         next = next.filter(r => r._id !== payload.id);

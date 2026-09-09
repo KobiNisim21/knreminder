@@ -15,7 +15,6 @@ export default function ReminderList({
   selectedId,
   onSelect,
   onQuickAdd,
-  selectionMode,
   checkedIds,
   onToggleCheck,
   todaySectionRef,
@@ -69,7 +68,6 @@ export default function ReminderList({
               reminder={reminder}
               isSelected={selectedId === reminder._id}
               onSelect={onSelect}
-              selectionMode={selectionMode}
               isChecked={!!checkedIds?.includes(reminder._id)}
               onToggleCheck={onToggleCheck}
             />

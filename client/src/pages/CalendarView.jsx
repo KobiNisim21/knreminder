@@ -5,6 +5,7 @@ import MonthGrid from '../components/MonthGrid';
 import ReminderItem from '../components/ReminderItem';
 import BottomNav from '../components/BottomNav';
 import AddReminderModal from '../components/AddReminderModal';
+import AddBirthdayModal from '../components/AddBirthdayModal';
 import EditReminderModal from '../components/EditReminderModal';
 import ActionBar from '../components/ActionBar';
 import BulkActionBar from '../components/BulkActionBar';
@@ -42,6 +43,7 @@ export default function CalendarView() {
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [addModalDate, setAddModalDate] = useState(null);
   const [editingReminder, setEditingReminder] = useState(null);
+  const [editingYearlyEvent, setEditingYearlyEvent] = useState(null);
   const [selectedReminder, setSelectedReminder] = useState(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [checkedIds, setCheckedIds] = useState([]);
@@ -69,9 +71,18 @@ export default function CalendarView() {
 
   function toggleChecked(id) {
     setSelectedReminder(null); // suppress single-item action bar
+    setSelectionMode(true);
     setCheckedIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
+  }
+
+  function openEditor(reminder) {
+    if (['birthday', 'special'].includes(reminder.type)) {
+      setEditingYearlyEvent(reminder);
+    } else {
+      setEditingReminder(reminder);
+    }
   }
 
   // Reminders for the currently selected day
@@ -229,7 +240,6 @@ export default function CalendarView() {
                   reminder={reminder}
                   isSelected={selectedReminder?._id === reminder._id}
                   onSelect={toggleSelect}
-                  selectionMode={selectionMode}
                   isChecked={checkedIds.includes(reminder._id)}
                   onToggleCheck={toggleChecked}
                 />
@@ -271,7 +281,7 @@ export default function CalendarView() {
         <ActionBar
           reminder={selectedReminder}
           onClose={() => setSelectedReminder(null)}
-          onEdit={(reminder) => setEditingReminder(reminder)}
+          onEdit={openEditor}
           onComplete={(id) => completeMutation.mutate(id)}
           onSnooze={(id, payload) => snoozeMutation.mutate({ id, ...payload })}
           onRemove={(id) => deleteMutation.mutate(id)}
@@ -304,11 +314,18 @@ export default function CalendarView() {
         reminder={editingReminder}
         onClose={() => setEditingReminder(null)}
       />
+      {editingYearlyEvent ? (
+        <AddBirthdayModal
+          isOpen
+          item={editingYearlyEvent}
+          onClose={() => setEditingYearlyEvent(null)}
+        />
+      ) : null}
 
       {/* ── Bottom navigation ────────────────────────────────────────────────── */}
       <BottomNav
         onAddPress={() => openAddForDay(selectedDate ?? today)}
-        anyModalOpen={addModalOpen || !!editingReminder || !!selectedReminder || selectionMode}
+        anyModalOpen={addModalOpen || !!editingReminder || !!editingYearlyEvent || !!selectedReminder || selectionMode}
       />
 
     </div>
