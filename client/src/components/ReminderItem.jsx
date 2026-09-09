@@ -231,20 +231,6 @@ export default function ReminderItem({
           )}
         </div>
 
-        {/* Dedicated completion action, separate from the bulk-select circle. */}
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); requestConfirmation('complete'); }}
-          disabled={isBusy}
-          className="flex-shrink-0 rounded-full bg-green-50 p-1.5 text-green-600
-                     active:scale-90 transition-transform disabled:opacity-50"
-          aria-label="סמן תזכורת כהושלמה"
-        >
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
-        </button>
-
         {/* Selected check indicator (single-select highlight) */}
         {isSelected && (
           <div className="flex-shrink-0 ml-1 text-primary">
